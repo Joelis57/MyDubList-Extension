@@ -1,4 +1,5 @@
 .icon-dubs-title {
+  color: inherit;
   margin-left: 0.3em !important;
   /* vertical-align: text-bottom; */
   padding: 1px 3px !important;
@@ -7,7 +8,7 @@
 }
 
 .icon-dubs-link {
-  color: #1c439b;
+  color: inherit;
   font-size: 1.1em;
   line-height: 1;
   display: inline;
