@@ -8,7 +8,7 @@
 
 .icon-dubs-link {
   color: #1c439b;
-  font-size: 1em;
+  font-size: 1.1em;
   line-height: 1;
   display: inline;
   vertical-align: -0.05em;
@@ -32,4 +32,10 @@
   line-height: 1em !important;
 
   border: 1px solid #fff;
+}
+
+.hoverinfo-contaniner:hover .icon-dubs-hover-hide,
+a:hover .icon-dubs-hover-hide {
+  opacity: 0;
+  pointer-events: none;
 }
