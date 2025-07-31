@@ -26,7 +26,7 @@
     ],
     "web_accessible_resources": [
         {
-            "resources": ["assets/dubbed.svg"],
+            "resources": ["assets/*.svg"],
             "matches": ["<all_urls>"]
         }
     ],
