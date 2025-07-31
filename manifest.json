@@ -1,38 +1,39 @@
 {
-    "manifest_version": 3,
-    "name": "MyDubList Extension",
-    "version": "1.0",
-    "description": "Displays a dubbed icon next to all anime entries on MyAnimeList.",
-    "permissions": ["storage"],
-    "host_permissions": ["https://myanimelist.net/*"],
-    "background": {
-        "service_worker": "background.js"
-    },
-    "action": {
-        "default_popup": "popup.html",
-        "default_icon": {
-            "16": "icons/icon16.png",
-            "32": "icons/icon32.png",
-            "48": "icons/icon48.png",
-            "128": "icons/icon128.png"
-        }
-    },
-    "content_scripts": [
-        {
-            "matches": ["https://myanimelist.net/*"],
-            "js": ["content.js"],
-            "css": ["style.css"]
-        }
-    ],
-    "web_accessible_resources": [
-        {
-            "resources": ["fonts/*"],
-            "matches": ["<all_urls>"]
-        }
-    ],
-    "icons": {
-        "16": "icons/icon16.png",
-        "48": "icons/icon48.png",
-        "128": "icons/icon128.png"
+  "manifest_version": 3,
+  "name": "MyDubList Extension",
+  "version": "1.0",
+  "description": "Displays a dubbed icon next to all anime entries on MyAnimeList.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://myanimelist.net/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://myanimelist.net/*"],
+      "js": ["content.js"],
+      "css": ["style.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fonts/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }
