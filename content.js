@@ -2,6 +2,11 @@ const DUBBED_ICON = chrome.runtime.getURL('assets/dubbed.svg');
 const INCOMPLETE_ICON = chrome.runtime.getURL('assets/incomplete.svg');
 const RAW_JSON_URL = 'https://raw.githubusercontent.com/Joelis57/MyDubList/main/final/dubbed_english.json';
 
+const style = document.createElement('link');
+style.rel = 'stylesheet';
+style.href = chrome.runtime.getURL('fonts/style.css');
+document.head.appendChild(style);
+
 function isValidAnimeLink(anchor) {
   const href = anchor.href.trim();
   const text = anchor.textContent.trim();
@@ -9,11 +14,8 @@ function isValidAnimeLink(anchor) {
 
   if (!animePageRegex.test(href)) return false;
   if (!text || text.length < 2) return false;
-
-  // Prevent duplicate insertion
   if (anchor.dataset.dubbedIcon === 'true') return false;
 
-  // Exceptions: don't inject in known unwanted sections
   const excluded = [
     '#horiznav_nav',
     '.spaceit_pad',
@@ -21,6 +23,10 @@ function isValidAnimeLink(anchor) {
   ];
   for (const sel of excluded) {
     if (anchor.closest(sel)) return false;
+  }
+
+  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) {
+    return false;
   }
 
   return true;
@@ -32,20 +38,28 @@ function extractAnimeId(url) {
 }
 
 function createIcon(isIncomplete = false, isLink = false) {
-  const icon = document.createElement('img');
-  icon.src = isIncomplete ? INCOMPLETE_ICON : DUBBED_ICON;
-  icon.alt = isIncomplete ? 'incomplete' : 'dubbed';
-  icon.title = isIncomplete ? 'This anime is incomplete dubbed' : 'Dubbed anime';
-  icon.className = 'mydub-icon';
-  return icon;
+  const span = document.createElement('span');
+  const baseClass = isIncomplete ? 'icon-dubs_incomplete' : 'icon-dubs';
+  const styleClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
+  span.className = `${baseClass} ${styleClass}`;
+  return span;
+}
+
+function injectImageOverlayIcon(anchor, isIncomplete) {
+  const parent = anchor.closest('.image');
+  if (!parent || parent.querySelector('.icon-dubs-image')) return;
+
+  const span = document.createElement('span');
+  span.className = 'icon-dubs-image';
+  span.textContent = isIncomplete ? '\ue900' : '\ue901';
+  parent.style.position = 'relative';
+  parent.appendChild(span);
 }
 
 async function fetchDubData() {
   try {
     const res = await fetch(RAW_JSON_URL);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch: HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`Failed to fetch: HTTP ${res.status}`);
     return await res.json();
   } catch (e) {
     console.error('[MyDubList] Failed to fetch dub data:', e);
@@ -78,19 +92,24 @@ async function addDubIconsFromList() {
     if (!isIncomplete && !isDubbed) return;
 
     anchor.dataset.dubbedIcon = 'true';
+    const isinRelatedSection = document.querySelector('.related-entries');
+    if (!isinRelatedSection) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
     anchor.appendChild(createIcon(isIncomplete, true));
+
+    if (anchor.classList.contains('link-image')) {
+      injectImageOverlayIcon(anchor, isIncomplete);
+    }
   });
 
-  // Add icon to <h1> title if it matches
   const titleEl = document.querySelector('.title-name strong');
-  if (titleEl && !document.querySelector('.title-name .mydub-icon')) {
+  if (titleEl && !document.querySelector('.title-name .icon-dubs, .title-name .icon-dubs_incomplete')) {
     const idMatch = window.location.href.match(/\/anime\/(\d+)/);
     if (idMatch) {
       const animeId = parseInt(idMatch[1], 10);
       const isIncomplete = incompleteSet.has(animeId);
       const isDubbed = dubbedSet.has(animeId);
       if (isIncomplete || isDubbed) {
-        titleEl.insertAdjacentElement('afterend', createIcon(isIncomplete));
+        titleEl.insertAdjacentElement('afterend', createIcon(isIncomplete, false, true));
       }
     }
   }
