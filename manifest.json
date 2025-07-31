@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "MyDubList Extension",
+  "name": "MyDubList",
   "version": "1.0",
-  "description": "Displays a dubbed icon next to all anime entries on MyAnimeList.",
+  "description": "Displays icons next to anime entries on MyAnimeList to show if they're dubbed in your selected language.",
   "permissions": ["storage"],
   "host_permissions": ["https://myanimelist.net/*"],
   "background": {

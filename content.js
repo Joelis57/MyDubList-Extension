@@ -181,9 +181,17 @@ async function addDubIconsFromList() {
   log('Annotation complete.');
 }
 
-addDubIconsFromList();
+chrome.storage.local.get('mydublistEnabled', (data) => {
+  const isEnabled = data.mydublistEnabled ?? true;
+  if (!isEnabled) {
+    log('MyDubList is disabled — skipping annotation');
+    return;
+  }
 
-const observer = new MutationObserver(() => {
   addDubIconsFromList();
+
+  const observer = new MutationObserver(() => {
+    addDubIconsFromList();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 });
-observer.observe(document.body, { childList: true, subtree: true });

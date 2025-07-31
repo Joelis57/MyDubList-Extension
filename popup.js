@@ -1,12 +1,14 @@
-import './mwc/switch/switch.js';
+document.addEventListener('DOMContentLoaded', () => {
+  const enabledCheckbox = document.getElementById('enabled');
 
-window.addEventListener('DOMContentLoaded', () => {
-  const toggle = document.getElementById('enabled');
-  chrome.storage.sync.get(['enabled'], ({ enabled }) => {
-    toggle.selected = enabled ?? true;
+  // Load saved state
+  chrome.storage.local.get('mydublistEnabled', (data) => {
+    enabledCheckbox.checked = data.mydublistEnabled ?? true;
   });
 
-  toggle.addEventListener('input', () => {
-    chrome.storage.sync.set({ enabled: toggle.selected });
+  // Save state when changed
+  enabledCheckbox.addEventListener('change', () => {
+    chrome.storage.local.set({ mydublistEnabled: enabledCheckbox.checked });
   });
 });
+  
