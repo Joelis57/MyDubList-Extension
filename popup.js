@@ -1,10 +1,17 @@
+function reloadActiveTab() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]?.id) {
+      chrome.tabs.reload(tabs[0].id);
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const enabledCheckbox = document.getElementById('enabled');
   const languageSelect = document.getElementById('language');
   const styleSelect = document.getElementById('style');
   const filterSelect = document.getElementById('filter');
 
-  // Load all saved settings
   chrome.storage.local.get(
     ['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter'],
     (data) => {
@@ -15,16 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   );
 
-  // Save enabled toggle
   enabledCheckbox.addEventListener('change', () => {
     chrome.storage.local.set({ mydublistEnabled: enabledCheckbox.checked });
   });
 
-  // Save language selection
   languageSelect.addEventListener('change', () => {
     const newLang = languageSelect.value;
 
-    // Remove old cached language data if needed
     chrome.storage.local.get('mydublistLanguage', (data) => {
       const oldLang = data.mydublistLanguage;
       if (oldLang && oldLang !== newLang) {
@@ -32,29 +36,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Save new language setting
-    chrome.storage.local.set({ mydublistLanguage: newLang }, () => {
-      // Reload the active tab to apply changes
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]?.id) {
-          chrome.tabs.reload(tabs[0].id);
-        }
-      });
-    });
-
-    languageSelect.blur(); // remove focus glow
+    chrome.storage.local.set({ mydublistLanguage: newLang }, reloadActiveTab);
+    languageSelect.blur();
   });
 
-
-  // Save style selection
   styleSelect.addEventListener('change', () => {
     chrome.storage.local.set({ mydublistStyle: styleSelect.value });
     styleSelect.blur();
   });
 
-  // Save filter selection
   filterSelect.addEventListener('change', () => {
-    chrome.storage.local.set({ mydublistFilter: filterSelect.value });
+    chrome.storage.local.set({ mydublistFilter: filterSelect.value }, reloadActiveTab);
     filterSelect.blur();
   });
 });

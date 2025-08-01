@@ -8,9 +8,7 @@ style.href = chrome.runtime.getURL('fonts/style.css');
 document.head.appendChild(style);
 
 function log(...args) {
-  if (IS_DEBUG) {
-    console.log('[MyDubList]', ...args);
-  }
+  if (IS_DEBUG) console.log('[MyDubList]', ...args);
 }
 
 function isValidAnimeLink(anchor) {
@@ -19,36 +17,16 @@ function isValidAnimeLink(anchor) {
   const animePageRegex = /^\/anime\/(\d+)(\/[^\/]*)?\/?$/;
 
   log(`Checking link: ${href}`);
-  if (!animePageRegex.test(url.pathname)) {
-    log(`Invalid anime link: ${href}`);
-    return false;
-  }
-  if (!anchor.textContent.trim()) {
-    log(`Empty link text: ${href}`);
-    return false;
-  }
-  if (anchor.dataset.dubbedIcon === 'true') {
-    log(`Already processed link: ${href}`);
-    return false;
-  }
+  if (!animePageRegex.test(url.pathname)) return false;
+  if (!anchor.textContent.trim()) return false;
+  if (anchor.dataset.dubbedIcon === 'true') return false;
 
-  const excluded = [
-    '#horiznav_nav',
-    '.spaceit_pad',
-    '[itemprop="itemListElement"]',
-    '.hoverinfo-contaniner'
-  ];
+  const excluded = ['#horiznav_nav', '.spaceit_pad', '[itemprop="itemListElement"]', '.hoverinfo-contaniner'];
   for (const sel of excluded) {
-    if (anchor.closest(sel)) {
-      log(`Excluded link: ${href} due to selector: ${sel}`);
-      return false;
-    }
+    if (anchor.closest(sel)) return false;
   }
 
-  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) {
-    log(`Excluded seasonal anime link: ${href}`);
-    return false;
-  }
+  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) return false;
 
   return true;
 }
@@ -56,8 +34,9 @@ function isValidAnimeLink(anchor) {
 function extractAnimeId(url) {
   const path = new URL(url, window.location.origin).pathname;
   const match = path.match(/^\/anime\/(\d+)/);
-  log(`Extracted ID: ${match ? match[1] : 'none'} from URL: ${url}`);
-  return match ? parseInt(match[1], 10) : null;
+  const id = match ? parseInt(match[1], 10) : null;
+  log(`Extracted ID: ${id} from URL: ${url}`);
+  return id;
 }
 
 function createIcon(isIncomplete = false, isLink = false) {
@@ -70,15 +49,9 @@ function createIcon(isIncomplete = false, isLink = false) {
 
 function injectImageOverlayIcon(anchor, isIncomplete) {
   const img = anchor.querySelector('img');
-  if (!img) {
-    log(`No image found for anchor: ${anchor.href}`);
-    return;
-  }
+  if (!img) return;
 
-  if (anchor.querySelector('.icon-dubs-image, .icon-dubs_incomplete-image')) {
-    log(`Image overlay already exists for anchor: ${anchor.href}`);
-    return;
-  }
+  if (anchor.querySelector('.icon-dubs-image, .icon-dubs_incomplete-image')) return;
 
   const span = document.createElement('span');
   span.className = isIncomplete ? 'icon-dubs_incomplete-image' : 'icon-dubs-image';
@@ -90,7 +63,6 @@ function injectImageOverlayIcon(anchor, isIncomplete) {
 
   span.classList.add('icon-dubs-hover-hide');
   anchor.appendChild(span);
-  log(`Injected image overlay icon for anchor: ${anchor.href}`);
 }
 
 function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
@@ -104,12 +76,42 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
   parent.appendChild(span);
 }
 
+function applyFilter(anchor, isDubbed, isIncomplete, filter) {
+  const shouldHide = (
+    (filter === 'dubbed' && !isDubbed && !isIncomplete) ||
+    (filter === 'undubbed' && (isDubbed || isIncomplete))
+  );
+
+  if (!shouldHide) return;
+
+  const path = window.location.pathname;
+
+  if (path.startsWith('/anime/season')) {
+    const container = anchor.closest('.seasonal-anime');
+    if (container) {
+      log(`Hiding seasonal item for filter: ${filter}`);
+      container.style.display = 'none';
+    }
+  } else if (path.startsWith('/topanime') || path.startsWith('/anime.php')) {
+    const row = anchor.closest('tr');
+    if (row) {
+      log(`Hiding row for filter: ${filter}`);
+      row.style.display = 'none';
+    } else {
+      const detail = anchor.closest('.detail');
+      if (detail) {
+        log(`Hiding detail for filter: ${filter}`);
+        detail.style.display = 'none';
+      }
+    }
+  }
+}
+
 async function fetchDubData(language) {
   const CACHE_KEY = `dubData_${language}`;
   const CACHE_TTL_MS = 60 * 60 * 1000;
 
   try {
-    // Try to read from cache
     const cached = await new Promise((resolve) =>
       chrome.storage.local.get(CACHE_KEY, resolve)
     );
@@ -122,18 +124,13 @@ async function fetchDubData(language) {
       return entry.data;
     }
 
-    // Fetch from network if no cache or expired
     const url = `https://raw.githubusercontent.com/Joelis57/MyDubList/main/final/dubbed_${language}.json`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch: HTTP ${res.status}`);
     const json = await res.json();
 
-    // Save to cache
     const saveObj = {};
-    saveObj[CACHE_KEY] = {
-      timestamp: now,
-      data: json
-    };
+    saveObj[CACHE_KEY] = { timestamp: now, data: json };
     chrome.storage.local.set(saveObj);
 
     log(`Fetched and cached data for language: ${language}`);
@@ -144,12 +141,10 @@ async function fetchDubData(language) {
   }
 }
 
-async function addDubIconsFromList(dubData) {
+async function addDubIconsFromList(dubData, filter) {
   const { dubbed = [], incomplete = [] } = dubData;
   const dubbedSet = new Set(dubbed);
   const incompleteSet = new Set(incomplete);
-
-  log('Scanning page for anime titles...');
 
   const anchors = [...document.querySelectorAll('a[href]')].filter(anchor => {
     try {
@@ -162,7 +157,6 @@ async function addDubIconsFromList(dubData) {
 
   anchors.forEach(anchor => {
     const fullHref = new URL(anchor.getAttribute('href'), window.location.origin).href;
-    log(`Processing anchor: ${fullHref}`);
 
     if (!isValidAnimeLink(anchor)) return;
 
@@ -171,19 +165,20 @@ async function addDubIconsFromList(dubData) {
 
     const isIncomplete = incompleteSet.has(id);
     const isDubbed = dubbedSet.has(id);
+
+    applyFilter(anchor, isDubbed, isIncomplete, filter);
+
     if (!isIncomplete && !isDubbed) return;
 
     anchor.dataset.dubbedIcon = 'true';
 
     if (anchor.querySelector('img')) {
-      log(`ID ${id} has an image`);
       injectImageOverlayIcon(anchor, isIncomplete);
     } else if (anchor.classList.contains('link-image')) {
-      log(`ID ${id} has a seasonal image`);
       injectImageOverlayIconSeasonal(anchor, isIncomplete);
     } else {
-      const isinRelatedSection = document.querySelector('.related-entries');
-      if (!isinRelatedSection) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+      const inRelated = document.querySelector('.related-entries');
+      if (!inRelated) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
       anchor.appendChild(createIcon(isIncomplete, true));
     }
 
@@ -206,9 +201,10 @@ async function addDubIconsFromList(dubData) {
   log('Annotation complete.');
 }
 
-chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage'], async (data) => {
+chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'], async (data) => {
   const isEnabled = data.mydublistEnabled ?? true;
   const language = data.mydublistLanguage || 'english';
+  const filter = data.mydublistFilter || 'all';
 
   if (!isEnabled) {
     log('MyDubList is disabled — skipping annotation');
@@ -218,10 +214,10 @@ chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage'], async (data)
   const dubData = await fetchDubData(language);
   if (!dubData) return;
 
-  addDubIconsFromList(dubData);
+  addDubIconsFromList(dubData, filter);
 
   const observer = new MutationObserver(() => {
-    addDubIconsFromList(dubData);
+    addDubIconsFromList(dubData, filter);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 });
