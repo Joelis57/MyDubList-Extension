@@ -86,9 +86,10 @@
     width: 150px;
     transition: border-color 0.2s ease;
   }
-  
+
   select:focus {
     border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(48, 104, 214, 0.2);
   }
   
   /* Toggle switch */

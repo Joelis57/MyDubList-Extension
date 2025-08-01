@@ -1,6 +1,5 @@
 const DUBBED_ICON = chrome.runtime.getURL('assets/dubbed.svg');
 const INCOMPLETE_ICON = chrome.runtime.getURL('assets/incomplete.svg');
-const RAW_JSON_URL = 'https://raw.githubusercontent.com/Joelis57/MyDubList/main/final/dubbed_english.json';
 const IS_DEBUG = false;
 
 const style = document.createElement('link');
@@ -105,21 +104,47 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
   parent.appendChild(span);
 }
 
-async function fetchDubData() {
+async function fetchDubData(language) {
+  const CACHE_KEY = `dubData_${language}`;
+  const CACHE_TTL_MS = 60 * 60 * 1000;
+
   try {
-    const res = await fetch(RAW_JSON_URL);
+    // Try to read from cache
+    const cached = await new Promise((resolve) =>
+      chrome.storage.local.get(CACHE_KEY, resolve)
+    );
+
+    const entry = cached[CACHE_KEY];
+    const now = Date.now();
+
+    if (entry && entry.timestamp && now - entry.timestamp < CACHE_TTL_MS) {
+      log(`Using cached data for language: ${language}`);
+      return entry.data;
+    }
+
+    // Fetch from network if no cache or expired
+    const url = `https://raw.githubusercontent.com/Joelis57/MyDubList/main/final/dubbed_${language}.json`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to fetch: HTTP ${res.status}`);
-    return await res.json();
+    const json = await res.json();
+
+    // Save to cache
+    const saveObj = {};
+    saveObj[CACHE_KEY] = {
+      timestamp: now,
+      data: json
+    };
+    chrome.storage.local.set(saveObj);
+
+    log(`Fetched and cached data for language: ${language}`);
+    return json;
   } catch (e) {
     console.error('Failed to fetch dub data:', e);
     return null;
   }
 }
-async function addDubIconsFromList() {
-  log('Loading dub data...');
-  const dubData = await fetchDubData();
-  if (!dubData) return;
 
+async function addDubIconsFromList(dubData) {
   const { dubbed = [], incomplete = [] } = dubData;
   const dubbedSet = new Set(dubbed);
   const incompleteSet = new Set(incomplete);
@@ -181,17 +206,22 @@ async function addDubIconsFromList() {
   log('Annotation complete.');
 }
 
-chrome.storage.local.get('mydublistEnabled', (data) => {
+chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage'], async (data) => {
   const isEnabled = data.mydublistEnabled ?? true;
+  const language = data.mydublistLanguage || 'english';
+
   if (!isEnabled) {
     log('MyDubList is disabled — skipping annotation');
     return;
   }
 
-  addDubIconsFromList();
+  const dubData = await fetchDubData(language);
+  if (!dubData) return;
+
+  addDubIconsFromList(dubData);
 
   const observer = new MutationObserver(() => {
-    addDubIconsFromList();
+    addDubIconsFromList(dubData);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 });
