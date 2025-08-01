@@ -177,8 +177,10 @@ async function addDubIconsFromList(dubData, filter) {
     } else if (anchor.classList.contains('link-image')) {
       injectImageOverlayIconSeasonal(anchor, isIncomplete);
     } else {
-      const inRelated = document.querySelector('.related-entries');
-      if (!inRelated) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+      const anchorText = anchor.textContent || '';
+      if (!/\s$/.test(anchorText)) {
+        anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+      }
       anchor.appendChild(createIcon(isIncomplete, true));
     }
 
