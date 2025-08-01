@@ -203,8 +203,26 @@ async function addDubIconsFromList(dubData, filter) {
 
 chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'], async (data) => {
   const isEnabled = data.mydublistEnabled ?? true;
-  const language = data.mydublistLanguage || 'english';
   const filter = data.mydublistFilter || 'all';
+  const language = data.mydublistLanguage;
+
+  if (!language) {
+    const browserLang = navigator.language.toLowerCase();
+    if (browserLang.startsWith('fr')) language = 'french';
+    else if (browserLang.startsWith('de')) language = 'german';
+    else if (browserLang.startsWith('he')) language = 'hebrew';
+    else if (browserLang.startsWith('hu')) language = 'hungarian';
+    else if (browserLang.startsWith('it')) language = 'italian';
+    else if (browserLang.startsWith('ja')) language = 'japanese';
+    else if (browserLang.startsWith('ko')) language = 'korean';
+    else if (browserLang.startsWith('zh')) language = 'mandarin';
+    else if (browserLang.startsWith('pt')) language = 'portuguese_br';
+    else if (browserLang.startsWith('es')) language = 'spanish';
+    else language = 'english';
+
+    chrome.storage.local.set({ mydublistLanguage: language });
+    log(`Detected browser language, defaulting to: ${language}`);
+  }
 
   if (!isEnabled) {
     log('MyDubList is disabled — skipping annotation');
