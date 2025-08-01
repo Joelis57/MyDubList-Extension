@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
 
   enabledCheckbox.addEventListener('change', () => {
-    chrome.storage.local.set({ mydublistEnabled: enabledCheckbox.checked });
+    chrome.storage.local.set({ mydublistEnabled: enabledCheckbox.checked }, reloadActiveTab);
   });
 
   languageSelect.addEventListener('change', () => {
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   styleSelect.addEventListener('change', () => {
-    chrome.storage.local.set({ mydublistStyle: styleSelect.value });
+    chrome.storage.local.set({ mydublistStyle: styleSelect.value }, reloadActiveTab);
     styleSelect.blur();
   });
 
