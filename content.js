@@ -206,7 +206,7 @@ async function addDubIconsFromList(dubData, filter) {
 chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'], async (data) => {
   const isEnabled = data.mydublistEnabled ?? true;
   const filter = data.mydublistFilter || 'all';
-  const language = data.mydublistLanguage;
+  let language = data.mydublistLanguage;
 
   if (!language) {
     const browserLang = navigator.language.toLowerCase();

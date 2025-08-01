@@ -10,7 +10,7 @@
 .icon-dubs-link {
   color: inherit;
   font-size: 1.1em;
-  line-height: 1;
+  line-height: 1 !important;
   display: inline;
   vertical-align: -0.05em;
   text-decoration: none;
