@@ -105,7 +105,6 @@ function applyFilter(anchor, isDubbed, isIncomplete, filter) {
   if (!shouldHide) return;
 
   const path = window.location.pathname;
-
   if (path.startsWith('/anime/season')) {
     const container = anchor.closest('.seasonal-anime');
     if (container) {
@@ -123,6 +122,15 @@ function applyFilter(anchor, isDubbed, isIncomplete, filter) {
         log(`Hiding detail for filter: ${filter}`);
         detail.style.display = 'none';
       }
+    }
+  } else if (path === '/') {
+    const container = anchor.closest('li');
+    if (container) {
+      log(`Hiding homepage item for filter: ${filter}`);
+      container.style.display = 'none';
+    } else if (hasBackgroundImage(anchor)) {
+      log(`Hiding homepage anchor for filter: ${filter}`);
+      anchor.style.display = 'none';
     }
   }
 }
