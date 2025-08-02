@@ -59,7 +59,9 @@ function injectImageOverlayIcon(anchor, isIncomplete) {
     anchor.style.position = 'relative';
   }
 
-  span.classList.add('icon-dubs-hover-hide');
+  if (anchor.querySelector('span.users, span.info')) {
+    span.classList.add('icon-dubs-hover-hide');
+  }
   anchor.appendChild(span);
 }
 
@@ -71,6 +73,10 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
   span.className = 'icon-dubs-image';
   span.textContent = isIncomplete ? '\ue900' : '\ue901';
   parent.style.position = 'relative';
+
+  if (anchor.querySelector('span.users, span.info')) {
+    span.classList.add('icon-dubs-hover-hide');
+  }
   parent.appendChild(span);
 }
 
@@ -83,6 +89,9 @@ function injectImageOverlayIconBackground(anchor, isIncomplete) {
 
   if (getComputedStyle(anchor).position === 'static') {
     anchor.style.position = 'relative';
+  }
+  if (anchor.querySelector('span.users, span.info')) {
+    span.classList.add('icon-dubs-hover-hide');
   }
   anchor.appendChild(span);
 }
