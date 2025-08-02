@@ -18,11 +18,11 @@ document.addEventListener('DOMContentLoaded', () => {
       languageSelect.value = data.mydublistLanguage || 'english';
       styleSelect.value = data.mydublistStyle || 'style_1';
       filterSelect.value = data.mydublistFilter || 'all';
-    }
-  );
+    });
 
   enabledCheckbox.addEventListener('change', () => {
-    browser.storage.local.set({ mydublistEnabled: enabledCheckbox.checked }, reloadActiveTab);
+    browser.storage.local.set({ mydublistEnabled: enabledCheckbox.checked })
+      .then(reloadActiveTab);
   });
 
   languageSelect.addEventListener('change', () => {
@@ -35,17 +35,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    browser.storage.local.set({ mydublistLanguage: newLang }, reloadActiveTab);
+    browser.storage.local.set({ mydublistLanguage: newLang })
+      .then(reloadActiveTab);
     languageSelect.blur();
   });
 
   styleSelect.addEventListener('change', () => {
-    browser.storage.local.set({ mydublistStyle: styleSelect.value }, reloadActiveTab);
+    browser.storage.local.set({ mydublistStyle: styleSelect.value })
+      .then(reloadActiveTab);
     styleSelect.blur();
   });
 
   filterSelect.addEventListener('change', () => {
-    browser.storage.local.set({ mydublistFilter: filterSelect.value }, reloadActiveTab);
+    browser.storage.local.set({ mydublistFilter: filterSelect.value })
+      .then(reloadActiveTab);
     filterSelect.blur();
   });
 });
