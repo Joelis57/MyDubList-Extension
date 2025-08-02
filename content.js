@@ -49,10 +49,10 @@ function injectImageOverlayIcon(anchor, isIncomplete) {
   const img = anchor.querySelector('img');
   if (!img) return;
 
-  if (anchor.querySelector('.icon-dubs-image, .icon-dubs_incomplete-image')) return;
+  if (anchor.querySelector('.icon-dubs-image')) return;
 
   const span = document.createElement('span');
-  span.className = isIncomplete ? 'icon-dubs_incomplete-image' : 'icon-dubs-image';
+  span.className = 'icon-dubs-image';
   span.textContent = isIncomplete ? '\ue900' : '\ue901';
 
   if (getComputedStyle(anchor).position === 'static') {
@@ -72,6 +72,19 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
   span.textContent = isIncomplete ? '\ue900' : '\ue901';
   parent.style.position = 'relative';
   parent.appendChild(span);
+}
+
+function injectImageOverlayIconBackground(anchor, isIncomplete) {
+  if (anchor.querySelector('.icon-dubs-image')) return;
+
+  const span = document.createElement('span');
+  span.className = 'icon-dubs-image';
+  span.textContent = isIncomplete ? '\ue900' : '\ue901';
+
+  if (getComputedStyle(anchor).position === 'static') {
+    anchor.style.position = 'relative';
+  }
+  anchor.appendChild(span);
 }
 
 function applyFilter(anchor, isDubbed, isIncomplete, filter) {
@@ -137,6 +150,21 @@ async function fetchDubData(language) {
   }
 }
 
+function hasBackgroundImage(anchor) {
+  // Check for inline style
+  const inlineBg = anchor.style.backgroundImage;
+  if (inlineBg && inlineBg !== 'none') return true;
+
+  // Check computed style
+  const computedBg = getComputedStyle(anchor).backgroundImage;
+  if (computedBg && computedBg !== 'none' && computedBg.includes('url')) return true;
+
+  // Check for data-bg attribute (common in lazy-loaded images)
+  if (anchor.hasAttribute('data-bg')) return true;
+
+  return false;
+}
+
 async function addDubIconsFromList(dubData, filter) {
   const { dubbed = [], incomplete = [] } = dubData;
   const dubbedSet = new Set(dubbed);
@@ -172,6 +200,8 @@ async function addDubIconsFromList(dubData, filter) {
       injectImageOverlayIcon(anchor, isIncomplete);
     } else if (anchor.classList.contains('link-image')) {
       injectImageOverlayIconSeasonal(anchor, isIncomplete);
+    } else if (hasBackgroundImage(anchor)) {
+      injectImageOverlayIconBackground(anchor, isIncomplete)
     } else {
       const anchorText = anchor.textContent || '';
       if (!/\s$/.test(anchorText)) {
