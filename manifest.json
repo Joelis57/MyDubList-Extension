@@ -5,9 +5,6 @@
   "description": "Displays icons next to anime entries on MyAnimeList to show if they're dubbed in your selected language.",
   "permissions": ["storage"],
   "host_permissions": ["https://myanimelist.net/*"],
-  "background": {
-    "service_worker": "background.js"
-  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
