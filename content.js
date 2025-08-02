@@ -1,10 +1,8 @@
-const DUBBED_ICON = chrome.runtime.getURL('assets/dubbed.svg');
-const INCOMPLETE_ICON = chrome.runtime.getURL('assets/incomplete.svg');
 const IS_DEBUG = false;
 
 const style = document.createElement('link');
 style.rel = 'stylesheet';
-style.href = chrome.runtime.getURL('fonts/style.css');
+style.href = browser.runtime.getURL('fonts/style.css');
 document.head.appendChild(style);
 
 function log(...args) {
@@ -112,9 +110,7 @@ async function fetchDubData(language) {
   const CACHE_TTL_MS = 60 * 60 * 1000;
 
   try {
-    const cached = await new Promise((resolve) =>
-      chrome.storage.local.get(CACHE_KEY, resolve)
-    );
+    const cached = await browser.storage.local.get(CACHE_KEY);
 
     const entry = cached[CACHE_KEY];
     const now = Date.now();
@@ -131,7 +127,7 @@ async function fetchDubData(language) {
 
     const saveObj = {};
     saveObj[CACHE_KEY] = { timestamp: now, data: json };
-    chrome.storage.local.set(saveObj);
+    browser.storage.local.set(saveObj);
 
     log(`Fetched and cached data for language: ${language}`);
     return json;
@@ -203,41 +199,42 @@ async function addDubIconsFromList(dubData, filter) {
   log('Annotation complete.');
 }
 
-chrome.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'], async (data) => {
-  const isEnabled = data.mydublistEnabled ?? true;
-  const filter = data.mydublistFilter || 'all';
-  let language = data.mydublistLanguage;
+browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'])
+  .then(async (data) => {
+    const isEnabled = data.mydublistEnabled ?? true;
+    const filter = data.mydublistFilter || 'all';
+    let language = data.mydublistLanguage;
 
-  if (!language) {
-    const browserLang = navigator.language.toLowerCase();
-    if (browserLang.startsWith('fr')) language = 'french';
-    else if (browserLang.startsWith('de')) language = 'german';
-    else if (browserLang.startsWith('he')) language = 'hebrew';
-    else if (browserLang.startsWith('hu')) language = 'hungarian';
-    else if (browserLang.startsWith('it')) language = 'italian';
-    else if (browserLang.startsWith('ja')) language = 'japanese';
-    else if (browserLang.startsWith('ko')) language = 'korean';
-    else if (browserLang.startsWith('zh')) language = 'mandarin';
-    else if (browserLang.startsWith('pt')) language = 'portuguese_br';
-    else if (browserLang.startsWith('es')) language = 'spanish';
-    else language = 'english';
+    if (!language) {
+      const browserLang = navigator.language.toLowerCase();
+      if (browserLang.startsWith('fr')) language = 'french';
+      else if (browserLang.startsWith('de')) language = 'german';
+      else if (browserLang.startsWith('he')) language = 'hebrew';
+      else if (browserLang.startsWith('hu')) language = 'hungarian';
+      else if (browserLang.startsWith('it')) language = 'italian';
+      else if (browserLang.startsWith('ja')) language = 'japanese';
+      else if (browserLang.startsWith('ko')) language = 'korean';
+      else if (browserLang.startsWith('zh')) language = 'mandarin';
+      else if (browserLang.startsWith('pt')) language = 'portuguese_br';
+      else if (browserLang.startsWith('es')) language = 'spanish';
+      else language = 'english';
 
-    chrome.storage.local.set({ mydublistLanguage: language });
-    log(`Detected browser language, defaulting to: ${language}`);
-  }
+      browser.storage.local.set({ mydublistLanguage: language });
+      log(`Detected browser language, defaulting to: ${language}`);
+    }
 
-  if (!isEnabled) {
-    log('MyDubList is disabled — skipping annotation');
-    return;
-  }
+    if (!isEnabled) {
+      log('MyDubList is disabled — skipping annotation');
+      return;
+    }
 
-  const dubData = await fetchDubData(language);
-  if (!dubData) return;
+    const dubData = await fetchDubData(language);
+    if (!dubData) return;
 
-  addDubIconsFromList(dubData, filter);
-
-  const observer = new MutationObserver(() => {
     addDubIconsFromList(dubData, filter);
+
+    const observer = new MutationObserver(() => {
+      addDubIconsFromList(dubData, filter);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   });
-  observer.observe(document.body, { childList: true, subtree: true });
-});
