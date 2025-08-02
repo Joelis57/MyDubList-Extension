@@ -12,8 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const styleSelect = document.getElementById('style');
   const filterSelect = document.getElementById('filter');
 
-  browser.storage.local.get(
-    ['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter']
+  browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter'])
     .then((data) => {
       enabledCheckbox.checked = data.mydublistEnabled ?? true;
       languageSelect.value = data.mydublistLanguage || 'english';
