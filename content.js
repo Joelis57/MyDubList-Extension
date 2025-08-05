@@ -16,15 +16,22 @@ function isValidAnimeLink(anchor) {
 
   log(`Checking link: ${href}`);
   if (!animePageRegex.test(url.pathname)) return false;
-  if (!anchor.textContent.trim()) return false;
+  if (!anchor.textContent.trim() && !isTileUnit(anchor)) return false; // has to have text except for tile units
   if (anchor.dataset.dubbedIcon === 'true') return false;
+  log(`Basic checks passed: ${href}`);
 
   const excluded = ['#horiznav_nav', '.spaceit_pad', '[itemprop="itemListElement"]', '.hoverinfo-contaniner'];
   for (const sel of excluded) {
-    if (anchor.closest(sel)) return false;
+    if (anchor.closest(sel)) {
+      log(`Excluded because of ${sel}: ${href}`);
+      return false;
+    }
   }
 
-  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) return false;
+  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) {
+    log(`Excluded seasonal: ${href}`);
+    return false;
+  }
 
   return true;
 }
@@ -167,6 +174,10 @@ async function fetchDubData(language) {
   }
 }
 
+function isTileUnit(anchor) {
+  return anchor.parentElement && anchor.parentElement.classList.contains('tile-unit');
+}
+
 function hasBackgroundImage(anchor) {
   // Check for inline style
   const inlineBg = anchor.style.backgroundImage;
@@ -179,6 +190,8 @@ function hasBackgroundImage(anchor) {
   // Check for data-bg attribute (common in lazy-loaded images)
   if (anchor.hasAttribute('data-bg')) return true;
 
+  // Check for tile units used in the mobile version of MAL
+  if (isTileUnit(anchor)) return true;
   return false;
 }
 
@@ -220,11 +233,19 @@ async function addDubIconsFromList(dubData, filter) {
     } else if (hasBackgroundImage(anchor)) {
       injectImageOverlayIconBackground(anchor, isIncomplete)
     } else {
-      const anchorText = anchor.textContent || '';
-      if (!/\s$/.test(anchorText)) {
-        anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+      const textContainer = anchor.querySelector('.text') || anchor.querySelector('.title-name');
+      if (textContainer) {
+        if (!/\s$/.test(textContainer.textContent || '')) {
+          textContainer.insertAdjacentText('beforeend', '\u00A0');
+        }
+        textContainer.appendChild(createIcon(isIncomplete, true));
+      } else {
+        const anchorText = anchor.textContent || '';
+        if (!/\s$/.test(anchorText)) {
+          anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+        }
+        anchor.appendChild(createIcon(isIncomplete, true));
       }
-      anchor.appendChild(createIcon(isIncomplete, true));
     }
 
     log(`Icon added for ID: ${id}`);
