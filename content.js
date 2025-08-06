@@ -112,7 +112,7 @@ function applyFilter(anchor, isDubbed, isIncomplete, filter) {
   if (!shouldHide) return;
 
   const path = window.location.pathname;
-  if (path.startsWith('/anime/season')) {
+  if (path.startsWith('/anime/season') || path.startsWith('/anime/genre')) {
     const container = anchor.closest('.seasonal-anime');
     if (container) {
       log(`Hiding seasonal item for filter: ${filter}`);
