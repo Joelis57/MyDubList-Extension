@@ -1,4 +1,4 @@
-const IS_DEBUG = false;
+const IS_DEBUG = true;
 
 const style = document.createElement('link');
 style.rel = 'stylesheet';
@@ -226,7 +226,7 @@ async function addDubIconsFromList(dubData, filter) {
 
     anchor.dataset.dubbedIcon = 'true';
 
-    if (anchor.querySelector('img')) {
+    if ([...anchor.children].some(child => child.tagName === 'img')) {
       injectImageOverlayIcon(anchor, isIncomplete);
     } else if (anchor.classList.contains('link-image')) {
       injectImageOverlayIconSeasonal(anchor, isIncomplete);
