@@ -44,23 +44,23 @@ function extractAnimeId(url) {
   return id;
 }
 
-function createIcon(isIncomplete = false, isLink = false) {
+function createIcon(isIncomplete = false, isLink = false, style = 'style_1') {
+  const base = isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`;
+  const typeClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
   const span = document.createElement('span');
-  const baseClass = isIncomplete ? 'icon-dubs_incomplete' : 'icon-dubs';
-  const styleClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
-  span.className = `${baseClass} ${styleClass}`;
+  span.className = `mydublist-icon ${base} ${typeClass}`;
   return span;
 }
 
-function injectImageOverlayIcon(anchor, isIncomplete) {
+function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
   const img = anchor.querySelector('img');
   if (!img) return;
 
-  if (anchor.querySelector('.icon-dubs-image')) return;
+  if (anchor.querySelector('.mydublist-icon')) return;
 
   const span = document.createElement('span');
-  span.className = 'icon-dubs-image';
-  span.textContent = isIncomplete ? '\ue900' : '\ue901';
+  span.className = 'icon-dubs-image mydublist-icon';
+  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
 
   if (getComputedStyle(anchor).position === 'static') {
     anchor.style.position = 'relative';
@@ -72,13 +72,13 @@ function injectImageOverlayIcon(anchor, isIncomplete) {
   anchor.appendChild(span);
 }
 
-function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
+function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1') {
   const parent = anchor.closest('.image');
   if (!parent || parent.querySelector('.icon-dubs-image')) return;
 
   const span = document.createElement('span');
-  span.className = 'icon-dubs-image';
-  span.textContent = isIncomplete ? '\ue900' : '\ue901';
+  span.className = 'icon-dubs-image mydublist-icon';
+  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
   parent.style.position = 'relative';
 
   if (anchor.querySelector('span.users, span.info')) {
@@ -87,12 +87,12 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete) {
   parent.appendChild(span);
 }
 
-function injectImageOverlayIconBackground(anchor, isIncomplete) {
-  if (anchor.querySelector('.icon-dubs-image')) return;
+function injectImageOverlayIconBackground(anchor, isIncomplete, style = 'style_1') {
+  if (anchor.querySelector('.mydublist-icon')) return;
 
   const span = document.createElement('span');
-  span.className = 'icon-dubs-image';
-  span.textContent = isIncomplete ? '\ue900' : '\ue901';
+  span.className = 'icon-dubs-image mydublist-icon';
+  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
 
   if (getComputedStyle(anchor).position === 'static') {
     anchor.style.position = 'relative';
@@ -195,7 +195,7 @@ function hasBackgroundImage(anchor) {
   return false;
 }
 
-async function addDubIconsFromList(dubData, filter) {
+async function addDubIconsFromList(dubData, filter, style) {
   const { dubbed = [], incomplete = [] } = dubData;
   const dubbedSet = new Set(dubbed);
   const incompleteSet = new Set(incomplete);
@@ -227,24 +227,24 @@ async function addDubIconsFromList(dubData, filter) {
     anchor.dataset.dubbedIcon = 'true';
 
     if ([...anchor.children].some(child => child.tagName.toLocaleLowerCase() === 'img')) {
-      injectImageOverlayIcon(anchor, isIncomplete);
+      injectImageOverlayIcon(anchor, isIncomplete, style);
     } else if (anchor.classList.contains('link-image')) {
-      injectImageOverlayIconSeasonal(anchor, isIncomplete);
+      injectImageOverlayIconSeasonal(anchor, isIncomplete, style);
     } else if (hasBackgroundImage(anchor)) {
-      injectImageOverlayIconBackground(anchor, isIncomplete)
+      injectImageOverlayIconBackground(anchor, isIncomplete, style)
     } else {
       const textContainer = anchor.querySelector('.text') || anchor.querySelector('.title-name');
       if (textContainer) {
         if (!/\s$/.test(textContainer.textContent || '')) {
           textContainer.insertAdjacentText('beforeend', '\u00A0');
         }
-        textContainer.appendChild(createIcon(isIncomplete, true));
+        textContainer.appendChild(createIcon(isIncomplete, true, style));
       } else {
         const anchorText = anchor.textContent || '';
         if (!/\s$/.test(anchorText)) {
           anchor.insertAdjacentHTML('beforeend', '&nbsp;');
         }
-        anchor.appendChild(createIcon(isIncomplete, true));
+        anchor.appendChild(createIcon(isIncomplete, true, style));
       }
     }
 
@@ -252,14 +252,19 @@ async function addDubIconsFromList(dubData, filter) {
   });
 
   const titleEl = document.querySelector('.title-name strong');
-  if (titleEl && !document.querySelector('.title-name .icon-dubs, .title-name .icon-dubs_incomplete')) {
+  if (titleEl && !document.querySelector('.title-name .mydublist-icon')) {
     const idMatch = window.location.href.match(/\/anime\/(\d+)/);
     if (idMatch) {
       const animeId = parseInt(idMatch[1], 10);
       const isIncomplete = incompleteSet.has(animeId);
       const isDubbed = dubbedSet.has(animeId);
       if (isIncomplete || isDubbed) {
-        titleEl.insertAdjacentElement('afterend', createIcon(isIncomplete, false, true));
+        titleEl.insertAdjacentElement('afterend', createIcon(isIncomplete, false, style));
+      }
+      const titleContainer = document.querySelector('.h1-title');
+      if (titleContainer) {
+        titleContainer.style.display = 'flex';
+        titleContainer.style.alignItems = 'center';
       }
     }
   }
@@ -299,10 +304,18 @@ browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFi
     const dubData = await fetchDubData(language);
     if (!dubData) return;
 
-    addDubIconsFromList(dubData, filter);
+    const styleSetting = await browser.storage.local.get('mydublistStyle');
+    const style = styleSetting.mydublistStyle || 'style_1';
 
+    addDubIconsFromList(dubData, filter, style);
+    let mutationTimeout = null;
     const observer = new MutationObserver(() => {
-      addDubIconsFromList(dubData, filter);
+      if (mutationTimeout !== null) return;
+    
+      mutationTimeout = setTimeout(() => {
+        mutationTimeout = null;
+        addDubIconsFromList(dubData, filter, style);
+      }, 100);
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });
