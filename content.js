@@ -233,15 +233,18 @@ async function addDubIconsFromList(dubData, filter, style) {
     } else if (hasBackgroundImage(anchor)) {
       injectImageOverlayIconBackground(anchor, isIncomplete, style)
     } else {
-      const textContainer = anchor.querySelector('.text') || anchor.querySelector('.title-name');
+      const textContainer = anchor.querySelector('.name') || anchor.querySelector('.text') || anchor.querySelector('.title-name');
       if (textContainer) {
-        if (!/\s$/.test(textContainer.textContent || '')) {
-          textContainer.insertAdjacentText('beforeend', '\u00A0');
+        if (!/[\s\u00A0]$/.test(textContainer.textContent || '')) {
+          // Do not add space in search results as they add it dynamically
+          if (!anchor.querySelector('.name ')) {
+            textContainer.insertAdjacentText('beforeend', '\u00A0');
+          }
         }
         textContainer.appendChild(createIcon(isIncomplete, true, style));
       } else {
         const anchorText = anchor.textContent || '';
-        if (!/\s$/.test(anchorText)) {
+        if (!/[\s\u00A0]$/.test(anchorText)) {
           anchor.insertAdjacentHTML('beforeend', '&nbsp;');
         }
         anchor.appendChild(createIcon(isIncomplete, true, style));

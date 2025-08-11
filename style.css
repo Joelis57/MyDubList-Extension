@@ -41,3 +41,9 @@ a:hover .icon-dubs-hover-hide {
   opacity: 0;
   pointer-events: none;
 }
+
+.incrementalSearchResultList .icon-dubs-link {
+  margin-left: 0.3em;
+  margin-right: 0.3em;
+  vertical-align: text-bottom;
+}
