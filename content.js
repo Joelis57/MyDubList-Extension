@@ -291,8 +291,10 @@ browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFi
       else if (browserLang.startsWith('ja')) language = 'japanese';
       else if (browserLang.startsWith('ko')) language = 'korean';
       else if (browserLang.startsWith('zh')) language = 'mandarin';
-      else if (browserLang.startsWith('pt')) language = 'portuguese_br';
+      else if (browserLang.startsWith('pt')) language = 'portuguese';
       else if (browserLang.startsWith('es')) language = 'spanish';
+      else if (browserLang.startsWith('tl')) language = 'tagalog';
+      else if (browserLang.startsWith('ru')) language = 'russian';
       else language = 'english';
 
       browser.storage.local.set({ mydublistLanguage: language });
