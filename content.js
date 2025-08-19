@@ -52,55 +52,225 @@ function createIcon(isIncomplete = false, isLink = false, style = 'style_1') {
   return span;
 }
 
-function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
-  const img = anchor.querySelector('img');
-  if (!img) return;
+// Icon badge sizing and helpers
 
-  if (anchor.querySelector('.mydublist-icon')) return;
+const ICON_CFG = {
+  minFont: 13,
+  maxFont: 50,
+  perPx: 0.14,
+  widthCap: 220, // cap for container-based width (row anchors can be very wide)
+  defaultW: 167, // last-resort width when all reads are 0
+  minUsableW: 40, // used by background sizing box chooser
 
+  padYEm: 0.17,
+  padXEm: 0.24,
+  offsetEm: 0.30,
+  radiusEm: 0.30
+};
+
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+
+function getRenderedImgWidth(img) {
+  // Prefer the displayed width
+  let w = img.getBoundingClientRect().width;
+  if (!w) w = img.clientWidth;
+  if (!w) {
+    // HTML width attribute (often present on MAL thumbs)
+    const aw = parseFloat(img.getAttribute('width') || '');
+    if (aw) w = aw;
+  }
+  return w || 0;
+}
+
+function getRenderedElWidth(el) {
+  return el.getBoundingClientRect().width || el.clientWidth || parseFloat(getComputedStyle(el).width) || 0;
+}
+
+//if there is an <img>, use its width; otherwise use the container width
+function sizeIcon(span, container, img) {
+  let w = img ? getRenderedImgWidth(img) : 0;
+
+  if (!w) w = getRenderedElWidth(container);
+  if (w > ICON_CFG.widthCap) w = ICON_CFG.widthCap;
+  if (w < 1) w = ICON_CFG.defaultW; // last resort
+
+  const fs = clamp(Math.round(w * ICON_CFG.perPx), ICON_CFG.minFont, ICON_CFG.maxFont);
+
+  span.style.fontSize = fs + 'px';
+  span.style.padding  = `${Math.round(fs * ICON_CFG.padYEm)}px ${Math.round(fs * ICON_CFG.padXEm)}px`;
+  const offset = Math.round(fs * ICON_CFG.offsetEm);
+  span.style.top = offset + 'px';
+  span.style.right = offset + 'px';
+  span.style.borderRadius = Math.round(fs * ICON_CFG.radiusEm) + 'px';
+}
+
+function createIconSpan(isIncomplete, style) {
   const span = document.createElement('span');
   span.className = 'icon-dubs-image mydublist-icon';
   span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
+  return span;
+}
+
+// Observe containers (.image or anchor) for resize
+const mdlIconRO = new ResizeObserver(entries => {
+  for (const entry of entries) {
+    const container = entry.target;
+    const spans = container.querySelectorAll(':scope .mydublist-icon');
+    if (!spans.length) continue;
+    const img = container.querySelector('img');
+    spans.forEach(span => sizeIcon(span, container, img));
+  }
+});
+
+// Observe <img> elements so width changes (lazyload, density swap) rescale the badge
+const mdlImgRO = new ResizeObserver(entries => {
+  for (const entry of entries) {
+    const img = entry.target;
+    const container = img.closest('.image') || img.closest('a') || img.parentElement;
+    if (!container) continue;
+
+    const span =
+      container.querySelector('.mydublist-icon') ||
+      container.parentElement?.querySelector('.mydublist-icon');
+
+    if (!span) continue;
+
+    sizeIcon(span, container, img);
+  }
+});
+
+function maybeHideOnHover(anchor, span) {
+  if (anchor.querySelector('span.users, span.info')) {
+    span.classList.add('icon-dubs-hover-hide');
+  }
+}
+
+// Retry until size stabilizes (helps with lazyload / layout settling)
+function scheduleFinalSizing(container, span, img) {
+  let tries = 8;
+  let lastFs = 0;
+
+  const tick = () => {
+    sizeIcon(span, container, img);
+    const fs = parseFloat(span.style.fontSize) || 0;
+
+    if (--tries > 0 && Math.abs(fs - lastFs) >= 0.5) {
+      lastFs = fs;
+      requestAnimationFrame(tick);
+    }
+  };
+
+  requestAnimationFrame(tick);
+  setTimeout(() => sizeIcon(span, container, img), 150);
+  setTimeout(() => sizeIcon(span, container, img), 300);
+}
+
+// Background sizing helpers
+function pickSizingBoxForBackground(anchor) {
+  // Prefer a wrapper that actually has the thumbnail’s size
+  const candidates = [
+    anchor,
+    anchor.closest('.image'),
+    anchor.closest('.picSurround'),
+    anchor.parentElement
+  ].filter(Boolean);
+
+  for (const el of candidates) {
+    const w = el.getBoundingClientRect().width;
+    const h = el.getBoundingClientRect().height;
+    if (Math.max(w, h) >= ICON_CFG.minUsableW) return el;
+  }
+  // Fallback: climb a little
+  let el = anchor.parentElement, steps = 0;
+  while (el && steps++ < 4) {
+    const w = el.getBoundingClientRect().width;
+    const h = el.getBoundingClientRect().height;
+    if (Math.max(w, h) >= ICON_CFG.minUsableW) return el;
+    el = el.parentElement;
+  }
+  return anchor;
+}
+
+// Make inline anchors measurable without changing flow too much
+function ensureMeasurableAnchor(anchor) {
+  const cs = getComputedStyle(anchor);
+  if (cs.display === 'inline') {
+    anchor.style.display = 'inline-block'; // lets width/height/computed width take effect
+  }
+}
+
+// 1) Generic image-in-anchor
+function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
+  const img = anchor.querySelector('img');
+  if (!img) return;
+  if (anchor.querySelector('.mydublist-icon')) return;
+
+  const span = createIconSpan(isIncomplete, style);
 
   if (getComputedStyle(anchor).position === 'static') {
     anchor.style.position = 'relative';
   }
 
-  if (anchor.querySelector('span.users, span.info')) {
-    span.classList.add('icon-dubs-hover-hide');
-  }
+  maybeHideOnHover(anchor, span);
   anchor.appendChild(span);
+
+  // Prefer the .image wrapper for sizing/observing if available
+  const box = anchor.closest('.image') || anchor;
+
+  sizeIcon(span, box, img);
+
+  if (!img.complete) {
+    img.addEventListener('load', () => sizeIcon(span, box, img), { once: true });
+  }
+
+  scheduleFinalSizing(box, span, img);
+  mdlIconRO.observe(box);
+  if (box !== anchor) mdlIconRO.observe(anchor);
+  mdlImgRO.observe(img);
 }
 
+// 2) Seasonal (.image wrapper as container)
 function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1') {
   const parent = anchor.closest('.image');
   if (!parent || parent.querySelector('.icon-dubs-image')) return;
 
-  const span = document.createElement('span');
-  span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
+  const span = createIconSpan(isIncomplete, style);
   parent.style.position = 'relative';
 
-  if (anchor.querySelector('span.users, span.info')) {
-    span.classList.add('icon-dubs-hover-hide');
-  }
+  maybeHideOnHover(anchor, span);
   parent.appendChild(span);
+
+  const img = anchor.querySelector('img') || parent.querySelector('img') || null;
+
+  sizeIcon(span, parent, img);
+  if (img && !img.complete) {
+    img.addEventListener('load', () => sizeIcon(span, parent, img), { once: true });
+  }
+  scheduleFinalSizing(parent, span, img);
+  mdlIconRO.observe(parent);
+  if (img) mdlImgRO.observe(img);
 }
 
+// 3) Background-image case (anchor as container)
 function injectImageOverlayIconBackground(anchor, isIncomplete, style = 'style_1') {
   if (anchor.querySelector('.mydublist-icon')) return;
 
-  const span = document.createElement('span');
-  span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
+  const span = createIconSpan(isIncomplete, style);
 
   if (getComputedStyle(anchor).position === 'static') {
     anchor.style.position = 'relative';
   }
-  if (anchor.querySelector('span.users, span.info')) {
-    span.classList.add('icon-dubs-hover-hide');
-  }
+  maybeHideOnHover(anchor, span);
   anchor.appendChild(span);
+
+  ensureMeasurableAnchor(anchor);
+
+  const box = pickSizingBoxForBackground(anchor);
+
+  sizeIcon(span, box, null);
+  scheduleFinalSizing(box, span, null);
+  mdlIconRO.observe(box);
+  if (box !== anchor) mdlIconRO.observe(anchor);
 }
 
 function applyFilter(anchor, isDubbed, isIncomplete, filter) {
@@ -231,7 +401,7 @@ async function addDubIconsFromList(dubData, filter, style) {
     } else if (anchor.classList.contains('link-image')) {
       injectImageOverlayIconSeasonal(anchor, isIncomplete, style);
     } else if (hasBackgroundImage(anchor)) {
-      injectImageOverlayIconBackground(anchor, isIncomplete, style)
+      injectImageOverlayIconBackground(anchor, isIncomplete, style);
     } else {
       const textContainer = anchor.querySelector('.name') || anchor.querySelector('.text') || anchor.querySelector('.title-name');
       if (textContainer) {
@@ -313,10 +483,11 @@ browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFi
     const style = styleSetting.mydublistStyle || 'style_1';
 
     addDubIconsFromList(dubData, filter, style);
+
+    // Debounced mutation observer for infinite scroll / dynamic inserts
     let mutationTimeout = null;
     const observer = new MutationObserver(() => {
       if (mutationTimeout !== null) return;
-    
       mutationTimeout = setTimeout(() => {
         mutationTimeout = null;
         addDubIconsFromList(dubData, filter, style);
@@ -324,3 +495,30 @@ browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFi
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });
+
+// Lazyload hook
+document.addEventListener('lazyloaded', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement)) return;
+
+  // Find the container we measure against
+  const container =
+    img.closest('.image') ||
+    img.closest('a') ||
+    img.parentElement;
+
+  if (!container) return;
+
+  // Find the matching badge
+  const span =
+    container.querySelector('.mydublist-icon') ||
+    container.parentElement?.querySelector('.mydublist-icon');
+
+  if (!span) return;
+
+  sizeIcon(span, container, img);
+  scheduleFinalSizing(container, span, img);
+
+  mdlImgRO.observe(img);
+  mdlIconRO.observe(container);
+}, true);

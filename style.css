@@ -19,21 +19,25 @@
 
 .icon-dubs-image {
   font-family: 'MyDubListIcons' !important;
-  font-size: 14px;
   position: absolute;
   top: 4px;
   right: 4px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.7);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.6);
   color: #fff;
   z-index: 10;
   pointer-events: none;
-  padding: 2px 3px !important;
 
   display: inline-block;
   line-height: 1em !important;
+}
 
-  border: 1px solid #fff;
+@supports ((-webkit-backdrop-filter: blur(0)) or (backdrop-filter: blur(0))) {
+  .icon-dubs-image {
+    background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(4px) saturate(120%);
+    backdrop-filter: blur(4px) saturate(120%);
+  }
 }
 
 .hoverinfo-contaniner:hover .icon-dubs-hover-hide,
