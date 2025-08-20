@@ -1,11 +1,9 @@
 .icon-dubs-title {
-  font-size: 0.9em;
+  font-size: 1.1em;
   color: inherit;
-  margin-left: 0.3em !important;
+  margin-left: 0.15em !important;
   /* vertical-align: text-bottom; */
   padding: 1px 2px !important;
-  border: 1px solid;
-  border-radius: 4px;
 }
 
 .icon-dubs-link {
