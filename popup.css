@@ -28,7 +28,7 @@
     font-family: 'Inter', sans-serif;
     background: var(--color-bg);
     color: var(--color-text);
-    width: 320px;
+    width: 340px;
     /* Removed border-radius to make corners square */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -83,7 +83,7 @@
     background-position: right 10px center;
     background-size: 10px;
     outline: none;
-    width: 150px;
+    width: 190px;
     transition: border-color 0.2s ease;
   }
 

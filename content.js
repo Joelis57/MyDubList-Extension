@@ -1,5 +1,12 @@
 const IS_DEBUG = false;
 
+const API_BASE = 'https://api.mydublist.com';
+const PROVIDER_ORDER = ['MAL','AniList','ANN','AniSearch','HiAnime','Kenny','Manual','NSFW'];
+const PROVIDER_LABEL = { MAL:'MyAnimeList', AniList:'AniList', ANN:'Anime News Network', AniSearch:'AniSearch', HiAnime:'HiAnime', Kenny:'Kenny Forum', Manual:'Manual', NSFW:'NSFW' };
+const FAVICON_DOMAIN = { HiAnime:'hianime.to', AniList:'anilist.co', ANN:'animenewsnetwork.com', AniSearch:'anisearch.com', MAL:'myanimelist.net', Kenny:'myanimelist.net', Manual:'mydublist.com', NSFW:null };
+const NSFW_ICON = "data:image/svg+xml;utf8, <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'> <circle cx='32' cy='32' r='30' fill='%23e11d48'/> <g transform='translate(33.5,32)'> <text x='0' y='0' dy='.35em' text-anchor='middle' font-size='26' font-weight='700' fill='white' font-family='system-ui,-apple-system,Segoe UI,Roboto,sans-serif'>18+</text> </g> </svg>";
+function faviconUrlFor(prov){ const d=FAVICON_DOMAIN[prov]; if(prov==='NSFW') return NSFW_ICON; return d?`https://icons.duckduckgo.com/ip3/${d}.ico`:null; }
+
 const style = document.createElement('link');
 style.rel = 'stylesheet';
 style.href = browser.runtime.getURL('fonts/style.css');
@@ -312,31 +319,33 @@ function applyFilter(anchor, isDubbed, isIncomplete, filter) {
   }
 }
 
-async function fetchDubData(language) {
-  const CACHE_KEY = `dubData_${language}`;
+async function fetchDubData(language, confidence = 'low') {
+  const CACHE_KEY = `dubData_${language}_${confidence}`;
+  const OLD_CACHE_KEY = `dubData_${language}`;
   const CACHE_TTL_MS = 60 * 60 * 1000;
 
   try {
     const cached = await browser.storage.local.get(CACHE_KEY);
-
     const entry = cached[CACHE_KEY];
     const now = Date.now();
 
     if (entry && entry.timestamp && now - entry.timestamp < CACHE_TTL_MS) {
-      log(`Using cached data for language: ${language}`);
+      log(`Using cached data for language=${language}, confidence=${confidence}`);
       return entry.data;
     }
 
-    const url = `https://raw.githubusercontent.com/Joelis57/MyDubList/main/final/dubbed_${language}.json`;
-    const res = await fetch(url);
+    const url = `https://raw.githubusercontent.com/Joelis57/MyDubList/main/dubs/confidence/${confidence}/dubbed_${language}.json`;
+    const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`Failed to fetch: HTTP ${res.status}`);
     const json = await res.json();
 
-    const saveObj = {};
-    saveObj[CACHE_KEY] = { timestamp: now, data: json };
-    browser.storage.local.set(saveObj);
+    await browser.storage.local.set({
+      [CACHE_KEY]: { timestamp: now, data: json }
+    });
 
-    log(`Fetched and cached data for language: ${language}`);
+    browser.storage.local.remove(OLD_CACHE_KEY).catch(() => {});
+
+    log(`Fetched and cached for language=${language}, confidence=${confidence}`);
     return json;
   } catch (e) {
     console.error('Failed to fetch dub data:', e);
@@ -365,12 +374,83 @@ function hasBackgroundImage(anchor) {
   return false;
 }
 
-async function addDubIconsFromList(dubData, filter, style) {
+async function insertMdlSourcesSection(language){
+  try{
+    const m = window.location.pathname.match(/^\/anime\/(\d+)/);
+    if(!m) return;
+    const malId = parseInt(m[1],10);
+    if (document.getElementById('mydublist-sources-block')) return;
+
+    const res = await fetch(`${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`);
+    if(!res.ok) return;
+    const data = await res.json();
+    const keys = Object.keys(data).filter(k => !k.startsWith('_'));
+    if(!keys.length) return;
+
+    const left = document.querySelector('.leftside');
+    if(!left) return;
+    const infoH2 = Array.from(left.querySelectorAll('h2')).find(h=>h.textContent.trim()==='Information');
+    if(!infoH2) return;
+
+    const h2 = document.createElement('h2');
+    h2.textContent = 'MyDubList Sources';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'external_links';
+    for(const prov of PROVIDER_ORDER){
+      if(!(prov in data)) continue;
+      const url = data[prov];
+      const label = PROVIDER_LABEL[prov] || prov;
+      const ico = faviconUrlFor(prov);
+      if(url){
+        const a = document.createElement('a');
+        a.href = url;
+        a.className = 'link ga-click';
+        a.setAttribute('data-dubbed-icon','true');
+        const img = document.createElement('img');
+        img.className = 'link_icon';
+        img.alt = 'icon';
+        img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+        a.appendChild(img);
+        const cap = document.createElement('div');
+        cap.className='caption';
+        cap.textContent = label;
+        a.appendChild(cap);
+        wrap.appendChild(a);
+      }else{
+        const span = document.createElement('span');
+        span.className = 'link';
+        span.setAttribute('data-dubbed-icon','true');
+        const img = document.createElement('img');
+        img.className = 'link_icon';
+        img.alt = 'icon';
+        img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+        span.appendChild(img);
+        const cap = document.createElement('div');
+        cap.className='caption';
+        cap.textContent = label;
+        span.appendChild(cap);
+        wrap.appendChild(span);
+      }
+    }
+
+    const br = document.createElement('br');
+    const block = document.createElement('div');
+    block.id = 'mydublist-sources-block';
+    block.appendChild(h2);
+    block.appendChild(wrap);
+    block.appendChild(br);
+    left.insertBefore(block, infoH2);
+  }catch(e){ log('insertMdlSourcesSection error', e); }
+}
+
+function addDubIconsFromList(dubData, filter, style) {
   const { dubbed = [], incomplete = [] } = dubData;
   const dubbedSet = new Set(dubbed);
   const incompleteSet = new Set(incomplete);
 
   const anchors = [...document.querySelectorAll('a[href]')].filter(anchor => {
+    if (anchor.hasAttribute('data-dubbed-icon')) return false;
     try {
       const url = new URL(anchor.getAttribute('href'), window.location.origin);
       return url.pathname.startsWith('/anime/');
@@ -445,7 +525,7 @@ async function addDubIconsFromList(dubData, filter, style) {
   log('Annotation complete.');
 }
 
-browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter'])
+browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter', 'mydublistConfidence'])
   .then(async (data) => {
     const isEnabled = data.mydublistEnabled ?? true;
     const filter = data.mydublistFilter || 'all';
@@ -476,7 +556,9 @@ browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFi
       return;
     }
 
-    const dubData = await fetchDubData(language);
+    const confidence = data.mydublistConfidence || 'low';
+    const dubData = await fetchDubData(language, confidence);
+    insertMdlSourcesSection(language);
     if (!dubData) return;
 
     const styleSetting = await browser.storage.local.get('mydublistStyle');

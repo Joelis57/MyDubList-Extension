@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "MyDubList",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Marks dubbed anime in YOUR language on MyAnimeList and let's you filter them.",
   "permissions": ["storage"],
-  "host_permissions": ["https://myanimelist.net/*"],
+  "host_permissions": ["https://myanimelist.net/*", "https://api.mydublist.com/*", "https://raw.githubusercontent.com/*", "https://icons.duckduckgo.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

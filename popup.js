@@ -11,8 +11,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const languageSelect = document.getElementById('language');
   const styleSelect = document.getElementById('style');
   const filterSelect = document.getElementById('filter');
+  const confidenceSelect = document.getElementById('confidence');
 
-  browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter'])
+  browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter', 'mydublistConfidence'])
     .then((data) => {
       enabledCheckbox.checked = data.mydublistEnabled ?? true;
       languageSelect.value = data.mydublistLanguage || 'english';
@@ -50,5 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
     browser.storage.local.set({ mydublistFilter: filterSelect.value })
       .then(reloadActiveTab);
     filterSelect.blur();
+  });
+
+  confidenceSelect.addEventListener('change', () => {
+    browser.storage.local.set({ mydublistConfidence: confidenceSelect.value })
+      .then(reloadActiveTab);
+    confidenceSelect.blur();
   });
 });
