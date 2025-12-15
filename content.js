@@ -392,8 +392,9 @@ async function insertMdlSourcesSection(language){
     const infoH2 = Array.from(left.querySelectorAll('h2')).find(h=>h.textContent.trim()==='Information');
     if(!infoH2) return;
 
+    let sourceCount = 0;
+
     const h2 = document.createElement('h2');
-    h2.textContent = 'MyDubList Sources';
 
     const wrap = document.createElement('div');
     wrap.className = 'external_links';
@@ -403,6 +404,7 @@ async function insertMdlSourcesSection(language){
       const label = PROVIDER_LABEL[prov] || prov;
       const ico = faviconUrlFor(prov);
       if(url){
+        sourceCount++;
         const a = document.createElement('a');
         a.href = url;
         a.className = 'link ga-click';
@@ -433,6 +435,8 @@ async function insertMdlSourcesSection(language){
         wrap.appendChild(span);
       }
     }
+
+    h2.textContent = `MyDubList Sources (${sourceCount})`;
 
     const br = document.createElement('br');
     const block = document.createElement('div');
