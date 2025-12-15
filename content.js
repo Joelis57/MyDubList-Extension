@@ -1,9 +1,9 @@
 const IS_DEBUG = false;
 
 const API_BASE = 'https://api.mydublist.com';
-const PROVIDER_ORDER = ['MAL','AniList','ANN','aniSearch','Kitsu','HiAnime','Kenny','Manual','NSFW'];
-const PROVIDER_LABEL = { MAL:'MyAnimeList', AniList:'AniList', ANN:'Anime News Network', aniSearch:'aniSearch', Kitsu:'Kitsu', HiAnime:'HiAnime', Kenny:'Kenny Forum', Manual:'Manual', NSFW:'NSFW' };
-const FAVICON_DOMAIN = { HiAnime:'hianime.to', AniList:'anilist.co', ANN:'animenewsnetwork.com', aniSearch:'anisearch.com', Kitsu:'kitsu.io', MAL:'myanimelist.net', Kenny:'myanimelist.net', Manual:'mydublist.com', NSFW:null };
+const PROVIDER_ORDER = ['MAL','AniList','ANN','aniSearch','AnimeSchedule','Kitsu','HiAnime','Kenny','Manual','NSFW'];
+const PROVIDER_LABEL = { MAL:'MyAnimeList', AniList:'AniList', ANN:'Anime News Network', aniSearch:'aniSearch', AnimeSchedule:'AnimeSchedule', Kitsu:'Kitsu', HiAnime:'HiAnime', Kenny:'Kenny Forum', Manual:'Manual', NSFW:'NSFW' };
+const FAVICON_DOMAIN = { HiAnime:'hianime.to', AniList:'anilist.co', ANN:'animenewsnetwork.com', aniSearch:'anisearch.com', AnimeSchedule:'animeschedule.net', Kitsu:'kitsu.io', MAL:'myanimelist.net', Kenny:'myanimelist.net', Manual:'mydublist.com', NSFW:null };
 const NSFW_ICON = "data:image/svg+xml;utf8, <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'> <circle cx='32' cy='32' r='30' fill='%23e11d48'/> <g transform='translate(33.5,32)'> <text x='0' y='0' dy='.35em' text-anchor='middle' font-size='26' font-weight='700' fill='white' font-family='system-ui,-apple-system,Segoe UI,Roboto,sans-serif'>18+</text> </g> </svg>";
 function faviconUrlFor(prov){ const d=FAVICON_DOMAIN[prov]; if(prov==='NSFW') return NSFW_ICON; return d?`https://icons.duckduckgo.com/ip3/${d}.ico`:null; }
 
