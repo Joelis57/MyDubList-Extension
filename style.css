@@ -1,29 +1,36 @@
 .icon-dubs-title {
-  font-size: 1.1em;
-  color: inherit;
+  font-size: 1em;
+  color: white;
   margin-left: 0.15em !important;
   /* vertical-align: text-bottom; */
-  padding: 1px 2px !important;
+  background-color: #4065ba;
+  border-radius: 4px;
+  text-align: center;
+  padding: 0.1em 0.2em !important;
 }
 
 .icon-dubs-link {
-  color: inherit;
-  font-size: 1.0em;
-  line-height: 1 !important;
-  display: inline;
-  /* vertical-align: -0.05em; */
+  color: white;
+  font-size: 12px;
+  line-height: 15px !important;
+  display: inline-block;
+  vertical-align: top;
+  text-align: center;
   text-decoration: none;
+  background-color: #4065ba;
+  border-radius: 4px;
+  min-height: 15px;
+  min-width: 24px;
 }
 
 .icon-dubs-image {
   font-family: 'MyDubListIcons' !important;
   position: absolute;
   top: 4px;
-  right: 4px;
+  left: 4px;
   border-radius: 5px;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  z-index: 10;
   pointer-events: none;
 
   display: inline-block;
@@ -32,7 +39,7 @@
 
 @supports ((-webkit-backdrop-filter: blur(0)) or (backdrop-filter: blur(0))) {
   .icon-dubs-image {
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 2, 117, 0.5);
     -webkit-backdrop-filter: blur(4px) saturate(120%);
     backdrop-filter: blur(4px) saturate(120%);
   }
