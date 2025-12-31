@@ -108,7 +108,7 @@ function sizeIcon(span, container, img) {
   span.style.padding  = `${Math.round(fs * ICON_CFG.padYEm)}px ${Math.round(fs * ICON_CFG.padXEm)}px`;
   const offset = Math.round(fs * ICON_CFG.offsetEm);
   span.style.top = offset + 'px';
-  span.style.right = offset + 'px';
+  span.style.left = offset + 'px';
   span.style.borderRadius = Math.round(fs * ICON_CFG.radiusEm) + 'px';
 }
 
