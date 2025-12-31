@@ -308,6 +308,12 @@ function applyFilter(anchor, isDubbed, isIncomplete, filter) {
         detail.style.display = 'none';
       }
     }
+  } else if (path.startsWith('/animelist/')) {
+    const container = anchor.closest('.list-item');
+    if (container) {
+      log(`Hiding animelist item for filter: ${filter}`);
+      container.style.display = 'none';
+    }
   } else if (path === '/') {
     const container = anchor.closest('li');
     if (container) {
