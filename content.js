@@ -20,9 +20,10 @@ function isValidAnimeLink(anchor) {
   const href = anchor.href.trim();
   const url = new URL(href, window.location.origin);
   const animePageRegex = /^\/anime\/(\d+)(\/[^\/]*)?\/?$/;
+  const animePhpRegex = /^\/anime\.php\?id=(\d+)/;
 
   log(`Checking link: ${href}`);
-  if (!animePageRegex.test(url.pathname)) return false;
+  if (!animePageRegex.test(url.pathname) && !animePhpRegex.test(url.pathname + url.search)) return false;
   if (!anchor.textContent.trim() && !isTileUnit(anchor)) return false; // has to have text except for tile units
   if (anchor.dataset.dubbedIcon === 'true') return false;
   log(`Basic checks passed: ${href}`);
@@ -44,8 +45,8 @@ function isValidAnimeLink(anchor) {
 }
 
 function extractAnimeId(url) {
-  const path = new URL(url, window.location.origin).pathname;
-  const match = path.match(/^\/anime\/(\d+)/);
+  const urlObj = new URL(url, window.location.origin);
+  const match = urlObj.pathname.match(/^\/anime\/(\d+)/) ?? (urlObj.pathname + urlObj.search).match(/^\/anime\.php\?id=(\d+)/);
   const id = match ? parseInt(match[1], 10) : null;
   log(`Extracted ID: ${id} from URL: ${url}`);
   return id;
@@ -376,7 +377,7 @@ function hasBackgroundImage(anchor) {
 
 async function insertMdlSourcesSection(language){
   try{
-    const m = window.location.pathname.match(/^\/anime\/(\d+)/);
+    const m = window.location.pathname.match(/^\/anime\/(\d+)/) ?? (window.location.pathname + window.location.search).match(/^\/anime\.php\?id=(\d+)/);
     if(!m) return;
     const malId = parseInt(m[1],10);
     if (document.getElementById('mydublist-sources-block')) return;
@@ -457,7 +458,7 @@ function addDubIconsFromList(dubData, filter, style) {
     if (anchor.hasAttribute('data-dubbed-icon')) return false;
     try {
       const url = new URL(anchor.getAttribute('href'), window.location.origin);
-      return url.pathname.startsWith('/anime/');
+      return url.pathname.startsWith('/anime/') || (url.pathname + url.search).startsWith('/anime.php?id=');
     } catch {
       return false;
     }
@@ -510,7 +511,7 @@ function addDubIconsFromList(dubData, filter, style) {
 
   const titleEl = document.querySelector('.title-name strong');
   if (titleEl && !document.querySelector('.title-name .mydublist-icon')) {
-    const idMatch = window.location.href.match(/\/anime\/(\d+)/);
+    const idMatch = window.location.href.match(/\/anime\/(\d+)/) ?? (window.location.pathname + window.location.search).match(/^\/anime\.php\?id=(\d+)/);;
     if (idMatch) {
       const animeId = parseInt(idMatch[1], 10);
       const isIncomplete = incompleteSet.has(animeId);
