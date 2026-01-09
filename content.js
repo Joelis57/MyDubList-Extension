@@ -55,18 +55,18 @@ document.head.appendChild(mdlFontStyle);
 // Badge UI (shared)
 // ---------------------------------------------------------------------------
 
-function createTitleIcon(isIncomplete = false, isLink = false, style = 'style_1') {
-  const base = isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`;
+function createTitleIcon(isPartial = false, isLink = false, style = 'style_1') {
+  const base = isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`;
   const typeClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
   const span = document.createElement('span');
   span.className = `mydublist-icon ${base} ${typeClass}`;
   return span;
 }
 
-function createOverlayIconSpan(isIncomplete, style) {
+function createOverlayIconSpan(isPartial, style) {
   const span = document.createElement('span');
   span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
+  span.classList.add(isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`);
   return span;
 }
 
@@ -198,12 +198,12 @@ function pickSizingBoxForBackground(anchor) {
 }
 
 // 1) Generic image-in-anchor
-function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
+function injectImageOverlayIcon(anchor, isPartial, style = 'style_1') {
   const img = anchor.querySelector('img');
   if (!img) return;
   if (anchor.querySelector('.mydublist-icon')) return;
 
-  const span = createOverlayIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isPartial, style);
 
   if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
 
@@ -222,11 +222,11 @@ function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
 }
 
 // 2) Seasonal (.image wrapper as container)
-function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1') {
+function injectImageOverlayIconSeasonal(anchor, isPartial, style = 'style_1') {
   const parent = anchor.closest('.image');
   if (!parent || parent.querySelector('.icon-dubs-image')) return;
 
-  const span = createOverlayIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isPartial, style);
   parent.style.position = 'relative';
 
   maybeHideOnHover(anchor, span);
@@ -243,10 +243,10 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1')
 }
 
 // 3) Background-image case
-function injectImageOverlayIconBackground(anchor, isIncomplete, style = 'style_1') {
+function injectImageOverlayIconBackground(anchor, isPartial, style = 'style_1') {
   if (anchor.querySelector('.mydublist-icon')) return;
 
-  const span = createOverlayIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isPartial, style);
 
   if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
 
@@ -356,19 +356,19 @@ const MAL_RULE = {
     return 'text';
   },
 
-  injectForAnchor(anchor, isIncomplete, style) {
+  injectForAnchor(anchor, isPartial, style) {
     const mode = this.chooseOverlayMode(anchor);
 
     if (mode === 'img') {
-      injectImageOverlayIcon(anchor, isIncomplete, style);
+      injectImageOverlayIcon(anchor, isPartial, style);
       return;
     }
     if (mode === 'seasonal') {
-      injectImageOverlayIconSeasonal(anchor, isIncomplete, style);
+      injectImageOverlayIconSeasonal(anchor, isPartial, style);
       return;
     }
     if (mode === 'background') {
-      injectImageOverlayIconBackground(anchor, isIncomplete, style);
+      injectImageOverlayIconBackground(anchor, isPartial, style);
       return;
     }
 
@@ -379,16 +379,16 @@ const MAL_RULE = {
         // MAL sometimes adds spaces dynamically; avoid messing with search results
         if (!anchor.querySelector('.name ')) textContainer.insertAdjacentText('beforeend', '\u00A0');
       }
-      textContainer.appendChild(createTitleIcon(isIncomplete, true, style));
+      textContainer.appendChild(createTitleIcon(isPartial, true, style));
     } else {
       const anchorText = anchor.textContent || '';
       if (!/[\s\u00A0]$/.test(anchorText)) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
-      anchor.appendChild(createTitleIcon(isIncomplete, true, style));
+      anchor.appendChild(createTitleIcon(isPartial, true, style));
     }
   },
 
-  applyFilter(anchor, isDubbed, isIncomplete, filter) {
-    const shouldHide = (filter === 'dubbed' && !isDubbed && !isIncomplete) || (filter === 'undubbed' && (isDubbed || isIncomplete));
+  applyFilter(anchor, isDubbed, isPartial, filter) {
+    const shouldHide = (filter === 'dubbed' && !isDubbed && !isPartial) || (filter === 'undubbed' && (isDubbed || isPartial));
     if (!shouldHide) return;
 
     const path = window.location.pathname;
@@ -416,7 +416,7 @@ const MAL_RULE = {
     }
   },
 
-  annotateTitle(dubbedSet, incompleteSet, style) {
+  annotateTitle(dubbedSet, partialSet, style) {
     const titleEl = document.querySelector('.title-name strong');
     if (!titleEl) return;
     if (document.querySelector('.title-name .mydublist-icon')) return;
@@ -426,11 +426,11 @@ const MAL_RULE = {
 
     const animeId = parseInt(idMatch[1], 10);
     const isDubbed = dubbedSet.has(animeId);
-    const isIncomplete = incompleteSet.has(animeId);
+    const isPartial = partialSet.has(animeId);
 
-    log(`Checking anime title annotation: ${animeId} (isDubbed: ${isDubbed}, isIncomplete: ${isIncomplete})`);
-    if (isIncomplete || isDubbed) {
-      titleEl.insertAdjacentElement('afterend', createTitleIcon(isIncomplete, false, style));
+    log(`Checking anime title annotation: ${animeId} (isDubbed: ${isDubbed}, isPartial: ${isPartial})`);
+    if (isPartial || isDubbed) {
+      titleEl.insertAdjacentElement('afterend', createTitleIcon(isPartial, false, style));
       const titleContainer = document.querySelector('.h1-title');
       if (titleContainer) {
         titleContainer.style.display = 'flex';
@@ -649,9 +649,9 @@ if (!activeRule) {
         activeRule.maybeInsertSourcesSection(language);
       }
 
-      const { dubbed = [], incomplete = [] } = dubData;
+      const { dubbed = [], partial = [] } = dubData;
       const dubbedSet = new Set(dubbed);
-      const incompleteSet = new Set(incomplete);
+      const partialSet = new Set(partial);
 
       // Avoid reprocessing the same anchors (MutationObserver can cause repeats)
       const processed = new WeakSet();
@@ -691,22 +691,22 @@ if (!activeRule) {
           if (!id) continue;
 
           const isDubbed = dubbedSet.has(id);
-          const isIncomplete = incompleteSet.has(id);
-          log(`Checking anime id: ${id} (isDubbed: ${isDubbed}, isIncomplete: ${isIncomplete})`);
+          const isPartial = partialSet.has(id);
+          log(`Checking anime id: ${id} (isDubbed: ${isDubbed}, isPartial: ${isPartial})`);
 
           if (typeof activeRule.applyFilter === 'function') {
-            activeRule.applyFilter(anchor, isDubbed, isIncomplete, filter);
+            activeRule.applyFilter(anchor, isDubbed, isPartial, filter);
           }
 
-          if (!isIncomplete && !isDubbed) continue;
+          if (!isPartial && !isDubbed) continue;
 
           anchor.dataset.dubbedIcon = 'true';
-          activeRule.injectForAnchor(anchor, isIncomplete, style);
+          activeRule.injectForAnchor(anchor, isPartial, style);
         }
 
         // Optional: annotate the anime page title
         if (typeof activeRule.annotateTitle === 'function') {
-          activeRule.annotateTitle(dubbedSet, incompleteSet, style);
+          activeRule.annotateTitle(dubbedSet, partialSet, style);
         }
       }
 

@@ -8,7 +8,7 @@
 }
 
 [class^="icon-dubs"], [class*=" icon-dubs"],
-[class^="icon-incomplete"], [class*=" icon-incomplete"] {
+[class^="icon-partial"], [class*=" icon-partial"] {
   /* use !important to prevent issues with browser extensions that change fonts */
   font-family: 'MyDubListIcons' !important;
   speak: never;
@@ -26,24 +26,24 @@
 .icon-dubs_style_1:before {
   content: "\e900";
 }
-.icon-incomplete_style_1:before {
+.icon-partial_style_1:before {
   content: "\e901";
 }
 .icon-dubs_style_2:before {
   content: "\e902";
 }
-.icon-incomplete_style_2:before {
+.icon-partial_style_2:before {
   content: "\e903";
 }
 .icon-dubs_style_3:before {
   content: "\e904";
 }
-.icon-incomplete_style_3:before {
+.icon-partial_style_3:before {
   content: "\e905";
 }
 .icon-dubs_style_4:before {
   content: "\e906";
 }
-.icon-incomplete_style_4:before {
+.icon-partial_style_4:before {
   content: "\e907";
 }
