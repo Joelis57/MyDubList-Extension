@@ -1,57 +1,61 @@
 const IS_DEBUG = false;
 
-const API_BASE = 'https://api.mydublist.com';
-const PROVIDER_ORDER = ['MAL','AniList','ANN','aniSearch','AnimeSchedule','Kitsu','HiAnime','Kenny','Manual','NSFW'];
-const PROVIDER_LABEL = { MAL:'MyAnimeList', AniList:'AniList', ANN:'Anime News Network', aniSearch:'aniSearch', AnimeSchedule:'AnimeSchedule', Kitsu:'Kitsu', HiAnime:'HiAnime', Kenny:'Kenny Forum', Manual:'Manual', NSFW:'NSFW' };
-const FAVICON_DOMAIN = { HiAnime:'hianime.to', AniList:'anilist.co', ANN:'animenewsnetwork.com', aniSearch:'anisearch.com', AnimeSchedule:'animeschedule.net', Kitsu:'kitsu.io', MAL:'myanimelist.net', Kenny:'myanimelist.net', Manual:'mydublist.com', NSFW:null };
-const NSFW_ICON = "data:image/svg+xml;utf8, <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'> <circle cx='32' cy='32' r='30' fill='%23e11d48'/> <g transform='translate(33.5,32)'> <text x='0' y='0' dy='.35em' text-anchor='middle' font-size='26' font-weight='700' fill='white' font-family='system-ui,-apple-system,Segoe UI,Roboto,sans-serif'>18+</text> </g> </svg>";
-function faviconUrlFor(prov){ const d=FAVICON_DOMAIN[prov]; if(prov==='NSFW') return NSFW_ICON; return d?`https://icons.duckduckgo.com/ip3/${d}.ico`:null; }
-
-const style = document.createElement('link');
-style.rel = 'stylesheet';
-style.href = browser.runtime.getURL('fonts/style.css');
-document.head.appendChild(style);
-
 function log(...args) {
   if (IS_DEBUG) console.log('[MyDubList]', ...args);
 }
 
-function isValidAnimeLink(anchor) {
-  const href = anchor.href.trim();
-  const url = new URL(href, window.location.origin);
-  const animePageRegex = /^\/anime\/(\d+)(\/[^\/]*)?\/?$/;
+// ---------------------------------------------------------------------------
+// Shared config
+// ---------------------------------------------------------------------------
 
-  log(`Checking link: ${href}`);
-  if (!animePageRegex.test(url.pathname)) return false;
-  if (!anchor.textContent.trim() && !isTileUnit(anchor)) return false; // has to have text except for tile units
-  if (anchor.dataset.dubbedIcon === 'true') return false;
-  log(`Basic checks passed: ${href}`);
+const API_BASE = 'https://api.mydublist.com';
 
-  const excluded = ['#horiznav_nav', '.spaceit_pad', '[itemprop="itemListElement"]', '.hoverinfo-contaniner'];
-  for (const sel of excluded) {
-    if (anchor.closest(sel)) {
-      log(`Excluded because of ${sel}: ${href}`);
-      return false;
-    }
-  }
+const PROVIDER_ORDER = ['MAL', 'AniList', 'ANN', 'aniSearch', 'AnimeSchedule', 'Kitsu', 'HiAnime', 'Kenny', 'Manual', 'NSFW'];
+const PROVIDER_LABEL = {
+  MAL: 'MyAnimeList',
+  AniList: 'AniList',
+  ANN: 'Anime News Network',
+  aniSearch: 'aniSearch',
+  AnimeSchedule: 'AnimeSchedule',
+  Kitsu: 'Kitsu',
+  HiAnime: 'HiAnime',
+  Kenny: 'Kenny Forum',
+  Manual: 'Manual',
+  NSFW: 'NSFW'
+};
 
-  if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) {
-    log(`Excluded seasonal: ${href}`);
-    return false;
-  }
+const FAVICON_DOMAIN = {
+  HiAnime: 'hianime.to',
+  AniList: 'anilist.co',
+  ANN: 'animenewsnetwork.com',
+  aniSearch: 'anisearch.com',
+  AnimeSchedule: 'animeschedule.net',
+  Kitsu: 'kitsu.io',
+  MAL: 'myanimelist.net',
+  Kenny: 'myanimelist.net',
+  Manual: 'mydublist.com',
+  NSFW: null
+};
 
-  return true;
+const NSFW_ICON = "data:image/svg+xml;utf8, <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'> <circle cx='32' cy='32' r='30' fill='%23e11d48'/> <g transform='translate(33.5,32)'> <text x='0' y='0' dy='.35em' text-anchor='middle' font-size='26' font-weight='700' fill='white' font-family='system-ui,-apple-system,Segoe UI,Roboto,sans-serif'>18+</text> </g> </svg>";
+
+function faviconUrlFor(prov) {
+  const d = FAVICON_DOMAIN[prov];
+  if (prov === 'NSFW') return NSFW_ICON;
+  return d ? `https://icons.duckduckgo.com/ip3/${d}.ico` : null;
 }
 
-function extractAnimeId(url) {
-  const path = new URL(url, window.location.origin).pathname;
-  const match = path.match(/^\/anime\/(\d+)/);
-  const id = match ? parseInt(match[1], 10) : null;
-  log(`Extracted ID: ${id} from URL: ${url}`);
-  return id;
-}
+// Font icon stylesheet
+const mdlFontStyle = document.createElement('link');
+mdlFontStyle.rel = 'stylesheet';
+mdlFontStyle.href = browser.runtime.getURL('fonts/style.css');
+document.head.appendChild(mdlFontStyle);
 
-function createIcon(isIncomplete = false, isLink = false, style = 'style_1') {
+// ---------------------------------------------------------------------------
+// Badge UI (shared)
+// ---------------------------------------------------------------------------
+
+function createTitleIcon(isIncomplete = false, isLink = false, style = 'style_1') {
   const base = isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`;
   const typeClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
   const span = document.createElement('span');
@@ -59,15 +63,20 @@ function createIcon(isIncomplete = false, isLink = false, style = 'style_1') {
   return span;
 }
 
-// Icon badge sizing and helpers
+function createOverlayIconSpan(isIncomplete, style) {
+  const span = document.createElement('span');
+  span.className = 'icon-dubs-image mydublist-icon';
+  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
+  return span;
+}
 
 const ICON_CFG = {
   minFont: 13,
   maxFont: 50,
   perPx: 0.14,
-  widthCap: 220, // cap for container-based width (row anchors can be very wide)
-  defaultW: 167, // last-resort width when all reads are 0
-  minUsableW: 40, // used by background sizing box chooser
+  widthCap: 220,
+  defaultW: 167,
+  minUsableW: 40,
 
   padYEm: 0.17,
   padXEm: 0.24,
@@ -75,14 +84,14 @@ const ICON_CFG = {
   radiusEm: 0.30
 };
 
-function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function clamp(n, a, b) {
+  return Math.max(a, Math.min(b, n));
+}
 
 function getRenderedImgWidth(img) {
-  // Prefer the displayed width
   let w = img.getBoundingClientRect().width;
   if (!w) w = img.clientWidth;
   if (!w) {
-    // HTML width attribute (often present on MAL thumbs)
     const aw = parseFloat(img.getAttribute('width') || '');
     if (aw) w = aw;
   }
@@ -93,58 +102,23 @@ function getRenderedElWidth(el) {
   return el.getBoundingClientRect().width || el.clientWidth || parseFloat(getComputedStyle(el).width) || 0;
 }
 
-//if there is an <img>, use its width; otherwise use the container width
+// If there is an <img>, use its width; otherwise use the container width
 function sizeIcon(span, container, img) {
   let w = img ? getRenderedImgWidth(img) : 0;
 
   if (!w) w = getRenderedElWidth(container);
   if (w > ICON_CFG.widthCap) w = ICON_CFG.widthCap;
-  if (w < 1) w = ICON_CFG.defaultW; // last resort
+  if (w < 1) w = ICON_CFG.defaultW;
 
   const fs = clamp(Math.round(w * ICON_CFG.perPx), ICON_CFG.minFont, ICON_CFG.maxFont);
 
   span.style.fontSize = fs + 'px';
-  span.style.padding  = `${Math.round(fs * ICON_CFG.padYEm)}px ${Math.round(fs * ICON_CFG.padXEm)}px`;
+  span.style.padding = `${Math.round(fs * ICON_CFG.padYEm)}px ${Math.round(fs * ICON_CFG.padXEm)}px`;
   const offset = Math.round(fs * ICON_CFG.offsetEm);
   span.style.top = offset + 'px';
   span.style.right = offset + 'px';
   span.style.borderRadius = Math.round(fs * ICON_CFG.radiusEm) + 'px';
 }
-
-function createIconSpan(isIncomplete, style) {
-  const span = document.createElement('span');
-  span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isIncomplete ? `icon-incomplete_${style}` : `icon-dubs_${style}`);
-  return span;
-}
-
-// Observe containers (.image or anchor) for resize
-const mdlIconRO = new ResizeObserver(entries => {
-  for (const entry of entries) {
-    const container = entry.target;
-    const spans = container.querySelectorAll(':scope .mydublist-icon');
-    if (!spans.length) continue;
-    const img = container.querySelector('img');
-    spans.forEach(span => sizeIcon(span, container, img));
-  }
-});
-
-// Observe <img> elements so width changes (lazyload, density swap) rescale the badge
-const mdlImgRO = new ResizeObserver(entries => {
-  for (const entry of entries) {
-    const img = entry.target;
-    const container = img.closest('.image') || img.closest('a') || img.parentElement;
-    if (!container) continue;
-
-    const span =
-      container.querySelector('.mydublist-icon') ||
-      container.parentElement?.querySelector('.mydublist-icon');
-
-    if (!span) continue;
-
-    sizeIcon(span, container, img);
-  }
-});
 
 function maybeHideOnHover(anchor, span) {
   if (anchor.querySelector('span.users, span.info')) {
@@ -172,22 +146,47 @@ function scheduleFinalSizing(container, span, img) {
   setTimeout(() => sizeIcon(span, container, img), 300);
 }
 
-// Background sizing helpers
-function pickSizingBoxForBackground(anchor) {
-  // Prefer a wrapper that actually has the thumbnail’s size
-  const candidates = [
-    anchor,
-    anchor.closest('.image'),
-    anchor.closest('.picSurround'),
-    anchor.parentElement
-  ].filter(Boolean);
+// Observe containers (.image or anchor) for resize
+const mdlIconRO = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const container = entry.target;
+    const spans = container.querySelectorAll(':scope .mydublist-icon');
+    if (!spans.length) continue;
+    const img = container.querySelector('img');
+    spans.forEach((span) => sizeIcon(span, container, img));
+  }
+});
 
+// Observe <img> elements so width changes (lazyload, density swap) rescale the badge
+const mdlImgRO = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const img = entry.target;
+    const container = img.closest('.image') || img.closest('a') || img.parentElement;
+    if (!container) continue;
+
+    const span = container.querySelector('.mydublist-icon') || container.parentElement?.querySelector('.mydublist-icon');
+    if (!span) continue;
+
+    sizeIcon(span, container, img);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Overlay injection helpers (shared)
+// ---------------------------------------------------------------------------
+
+function ensureMeasurableAnchor(anchor) {
+  const cs = getComputedStyle(anchor);
+  if (cs.display === 'inline') anchor.style.display = 'inline-block';
+}
+
+function pickSizingBoxForBackground(anchor) {
+  const candidates = [anchor, anchor.closest('.image'), anchor.closest('.picSurround'), anchor.parentElement].filter(Boolean);
   for (const el of candidates) {
     const w = el.getBoundingClientRect().width;
     const h = el.getBoundingClientRect().height;
     if (Math.max(w, h) >= ICON_CFG.minUsableW) return el;
   }
-  // Fallback: climb a little
   let el = anchor.parentElement, steps = 0;
   while (el && steps++ < 4) {
     const w = el.getBoundingClientRect().width;
@@ -198,37 +197,23 @@ function pickSizingBoxForBackground(anchor) {
   return anchor;
 }
 
-// Make inline anchors measurable without changing flow too much
-function ensureMeasurableAnchor(anchor) {
-  const cs = getComputedStyle(anchor);
-  if (cs.display === 'inline') {
-    anchor.style.display = 'inline-block'; // lets width/height/computed width take effect
-  }
-}
-
 // 1) Generic image-in-anchor
 function injectImageOverlayIcon(anchor, isIncomplete, style = 'style_1') {
   const img = anchor.querySelector('img');
   if (!img) return;
   if (anchor.querySelector('.mydublist-icon')) return;
 
-  const span = createIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isIncomplete, style);
 
-  if (getComputedStyle(anchor).position === 'static') {
-    anchor.style.position = 'relative';
-  }
+  if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
 
   maybeHideOnHover(anchor, span);
   anchor.appendChild(span);
 
-  // Prefer the .image wrapper for sizing/observing if available
   const box = anchor.closest('.image') || anchor;
 
   sizeIcon(span, box, img);
-
-  if (!img.complete) {
-    img.addEventListener('load', () => sizeIcon(span, box, img), { once: true });
-  }
+  if (!img.complete) img.addEventListener('load', () => sizeIcon(span, box, img), { once: true });
 
   scheduleFinalSizing(box, span, img);
   mdlIconRO.observe(box);
@@ -241,7 +226,7 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1')
   const parent = anchor.closest('.image');
   if (!parent || parent.querySelector('.icon-dubs-image')) return;
 
-  const span = createIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isIncomplete, style);
   parent.style.position = 'relative';
 
   maybeHideOnHover(anchor, span);
@@ -250,23 +235,21 @@ function injectImageOverlayIconSeasonal(anchor, isIncomplete, style = 'style_1')
   const img = anchor.querySelector('img') || parent.querySelector('img') || null;
 
   sizeIcon(span, parent, img);
-  if (img && !img.complete) {
-    img.addEventListener('load', () => sizeIcon(span, parent, img), { once: true });
-  }
+  if (img && !img.complete) img.addEventListener('load', () => sizeIcon(span, parent, img), { once: true });
+
   scheduleFinalSizing(parent, span, img);
   mdlIconRO.observe(parent);
   if (img) mdlImgRO.observe(img);
 }
 
-// 3) Background-image case (anchor as container)
+// 3) Background-image case
 function injectImageOverlayIconBackground(anchor, isIncomplete, style = 'style_1') {
   if (anchor.querySelector('.mydublist-icon')) return;
 
-  const span = createIconSpan(isIncomplete, style);
+  const span = createOverlayIconSpan(isIncomplete, style);
 
-  if (getComputedStyle(anchor).position === 'static') {
-    anchor.style.position = 'relative';
-  }
+  if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
+
   maybeHideOnHover(anchor, span);
   anchor.appendChild(span);
 
@@ -280,44 +263,301 @@ function injectImageOverlayIconBackground(anchor, isIncomplete, style = 'style_1
   if (box !== anchor) mdlIconRO.observe(anchor);
 }
 
-function applyFilter(anchor, isDubbed, isIncomplete, filter) {
-  const shouldHide = (
-    (filter === 'dubbed' && !isDubbed && !isIncomplete) ||
-    (filter === 'undubbed' && (isDubbed || isIncomplete))
-  );
+// ---------------------------------------------------------------------------
+// Site rules
+// ---------------------------------------------------------------------------
 
-  if (!shouldHide) return;
+function hostMatches(host, patterns) {
+  return patterns.some((p) => (p instanceof RegExp ? p.test(host) : host === p || host.endsWith('.' + p)));
+}
 
-  const path = window.location.pathname;
-  if (path.startsWith('/anime/season') || path.startsWith('/anime/genre')) {
-    const container = anchor.closest('.seasonal-anime');
-    if (container) {
-      log(`Hiding seasonal item for filter: ${filter}`);
-      container.style.display = 'none';
+/**
+ * MyAnimeList rule
+ */
+const MAL_RULE = {
+  id: 'MAL',
+  hosts: [/^(?:.*\.)?myanimelist\.net$/],
+
+  // URL patterns
+  animePathRegex: /^\/anime\/(\d+)(\/[^\/]*)?\/?$/,
+  animeIdRegex: /^\/anime\/(\d+)/,
+
+  // DOM rules / heuristics
+  excludedAnchorClosestSelectors: ['#horiznav_nav', '.spaceit_pad', '[itemprop="itemListElement"]', '.hoverinfo-contaniner'],
+
+  isTileUnit(anchor) {
+    return anchor.parentElement && anchor.parentElement.classList.contains('tile-unit');
+  },
+
+  hasBackgroundImage(anchor) {
+    const inlineBg = anchor.style.backgroundImage;
+    if (inlineBg && inlineBg !== 'none') return true;
+
+    const computedBg = getComputedStyle(anchor).backgroundImage;
+    if (computedBg && computedBg !== 'none' && computedBg.includes('url')) return true;
+
+    if (anchor.hasAttribute('data-bg')) return true;
+
+    // Mobile tiles
+    if (this.isTileUnit(anchor)) return true;
+
+    return false;
+  },
+
+  /**
+   * When the anchor is "not ready" (e.g., text is still empty while MAL is rendering),
+   * we avoid marking it as processed so a later mutation can retry.
+   */
+  isProcessingReady(anchor, url) {
+    // If it's a tile unit, it often has no text by design.
+    if (this.isTileUnit(anchor)) return true;
+
+    // If MAL hasn't filled the title text yet, retry later.
+    if (!anchor.textContent.trim()) return false;
+
+    // Everything else is ready.
+    return true;
+  },
+
+  isValidAnimeLink(anchor, url) {
+    // Must match /anime/<id>[/title]
+    if (!this.animePathRegex.test(url.pathname)) return false;
+
+    // Avoid empty anchors unless they are tiles (thumbnail-only units)
+    if (!anchor.textContent.trim() && !this.isTileUnit(anchor)) return false;
+
+    // Already processed
+    if (anchor.dataset.dubbedIcon === 'true') return false;
+
+    // Exclusions
+    for (const sel of this.excludedAnchorClosestSelectors) {
+      if (anchor.closest(sel)) return false;
     }
-  } else if (path.startsWith('/topanime') || path.startsWith('/anime.php')) {
-    const row = anchor.closest('tr');
-    if (row) {
-      log(`Hiding row for filter: ${filter}`);
-      row.style.display = 'none';
+
+    // Seasonal title anchors inside the seasonal tiles can cause duplicates
+    if (anchor.closest('.seasonal-anime') && anchor.closest('.title')) return false;
+
+    return true;
+  },
+
+  extractAnimeId(url) {
+    const path = new URL(url, window.location.origin).pathname;
+    const m = path.match(this.animeIdRegex);
+    return m ? parseInt(m[1], 10) : null;
+  },
+
+  /**
+   * Decide *how* to annotate an anchor.
+   */
+  chooseOverlayMode(anchor) {
+    if ([...anchor.children].some((c) => c.tagName?.toLowerCase() === 'img')) return 'img';
+    if (anchor.classList.contains('link-image')) return 'seasonal';
+    if (this.hasBackgroundImage(anchor)) return 'background';
+    return 'text';
+  },
+
+  injectForAnchor(anchor, isIncomplete, style) {
+    const mode = this.chooseOverlayMode(anchor);
+
+    if (mode === 'img') {
+      injectImageOverlayIcon(anchor, isIncomplete, style);
+      return;
+    }
+    if (mode === 'seasonal') {
+      injectImageOverlayIconSeasonal(anchor, isIncomplete, style);
+      return;
+    }
+    if (mode === 'background') {
+      injectImageOverlayIconBackground(anchor, isIncomplete, style);
+      return;
+    }
+
+    // Text case
+    const textContainer = anchor.querySelector('.name') || anchor.querySelector('.text') || anchor.querySelector('.title-name');
+    if (textContainer) {
+      if (!/[\s\u00A0]$/.test(textContainer.textContent || '')) {
+        // MAL sometimes adds spaces dynamically; avoid messing with search results
+        if (!anchor.querySelector('.name ')) textContainer.insertAdjacentText('beforeend', '\u00A0');
+      }
+      textContainer.appendChild(createTitleIcon(isIncomplete, true, style));
     } else {
-      const detail = anchor.closest('.detail');
-      if (detail) {
-        log(`Hiding detail for filter: ${filter}`);
-        detail.style.display = 'none';
+      const anchorText = anchor.textContent || '';
+      if (!/[\s\u00A0]$/.test(anchorText)) anchor.insertAdjacentHTML('beforeend', '&nbsp;');
+      anchor.appendChild(createTitleIcon(isIncomplete, true, style));
+    }
+  },
+
+  applyFilter(anchor, isDubbed, isIncomplete, filter) {
+    const shouldHide = (filter === 'dubbed' && !isDubbed && !isIncomplete) || (filter === 'undubbed' && (isDubbed || isIncomplete));
+    if (!shouldHide) return;
+
+    const path = window.location.pathname;
+
+    if (path.startsWith('/anime/season') || path.startsWith('/anime/genre')) {
+      const container = anchor.closest('.seasonal-anime');
+      if (container) container.style.display = 'none';
+      return;
+    }
+
+    if (path.startsWith('/topanime') || path.startsWith('/anime.php')) {
+      const row = anchor.closest('tr');
+      if (row) row.style.display = 'none';
+      else {
+        const detail = anchor.closest('.detail');
+        if (detail) detail.style.display = 'none';
+      }
+      return;
+    }
+
+    if (path === '/') {
+      const container = anchor.closest('li');
+      if (container) container.style.display = 'none';
+      else if (this.hasBackgroundImage(anchor)) anchor.style.display = 'none';
+    }
+  },
+
+  annotateTitle(dubbedSet, incompleteSet, style) {
+    const titleEl = document.querySelector('.title-name strong');
+    if (!titleEl) return;
+    if (document.querySelector('.title-name .mydublist-icon')) return;
+
+    const idMatch = window.location.href.match(/\/anime\/(\d+)/);
+    if (!idMatch) return;
+
+    const animeId = parseInt(idMatch[1], 10);
+    const isDubbed = dubbedSet.has(animeId);
+    const isIncomplete = incompleteSet.has(animeId);
+
+    log(`Checking anime title annotation: ${animeId} (isDubbed: ${isDubbed}, isIncomplete: ${isIncomplete})`);
+    if (isIncomplete || isDubbed) {
+      titleEl.insertAdjacentElement('afterend', createTitleIcon(isIncomplete, false, style));
+      const titleContainer = document.querySelector('.h1-title');
+      if (titleContainer) {
+        titleContainer.style.display = 'flex';
+        titleContainer.style.alignItems = 'center';
       }
     }
-  } else if (path === '/') {
-    const container = anchor.closest('li');
-    if (container) {
-      log(`Hiding homepage item for filter: ${filter}`);
-      container.style.display = 'none';
-    } else if (hasBackgroundImage(anchor)) {
-      log(`Hiding homepage anchor for filter: ${filter}`);
-      anchor.style.display = 'none';
+  },
+
+  // Only annotate anchors that are relevant on MAL.
+  queryAnimeAnchors(root) {
+    const scope = root && root.nodeType === Node.ELEMENT_NODE ? root : document;
+
+    // Heuristic selectors to avoid scanning every anchor on large pages.
+    const candidates = scope.querySelectorAll(
+      'a[href^="/anime/"], a[href^="https://myanimelist.net/anime/"], a[href^="http://myanimelist.net/anime/"]'
+    );
+
+    return [...candidates];
+  },
+
+  async maybeInsertSourcesSection(language) {
+    try {
+      const m = window.location.pathname.match(this.animeIdRegex);
+      if (!m) return;
+      const malId = parseInt(m[1], 10);
+      if (document.getElementById('mydublist-sources-block')) return;
+
+      const res = await fetch(`${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const keys = Object.keys(data).filter((k) => !k.startsWith('_'));
+      if (!keys.length) return;
+
+      const left = document.querySelector('.leftside');
+      if (!left) return;
+      const infoH2 = Array.from(left.querySelectorAll('h2')).find((h) => h.textContent.trim() === 'Information');
+      if (!infoH2) return;
+
+      let sourceCount = 0;
+
+      const h2 = document.createElement('h2');
+      const wrap = document.createElement('div');
+      wrap.className = 'external_links';
+
+      for (const prov of PROVIDER_ORDER) {
+        if (!(prov in data)) continue;
+        const url = data[prov];
+        const label = PROVIDER_LABEL[prov] || prov;
+        const ico = faviconUrlFor(prov);
+
+        if (url) {
+          sourceCount++;
+          const a = document.createElement('a');
+          a.href = url;
+          a.className = 'link ga-click';
+          a.setAttribute('data-dubbed-icon', 'true');
+          const img = document.createElement('img');
+          img.className = 'link_icon';
+          img.alt = 'icon';
+          img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+          a.appendChild(img);
+          const cap = document.createElement('div');
+          cap.className = 'caption';
+          cap.textContent = label;
+          a.appendChild(cap);
+          wrap.appendChild(a);
+        } else {
+          const span = document.createElement('span');
+          span.className = 'link';
+          span.setAttribute('data-dubbed-icon', 'true');
+          const img = document.createElement('img');
+          img.className = 'link_icon';
+          img.alt = 'icon';
+          img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+          span.appendChild(img);
+          const cap = document.createElement('div');
+          cap.className = 'caption';
+          cap.textContent = label;
+          span.appendChild(cap);
+          wrap.appendChild(span);
+        }
+      }
+
+      h2.textContent = `MyDubList Sources (${sourceCount})`;
+
+      const br = document.createElement('br');
+      const block = document.createElement('div');
+      block.id = 'mydublist-sources-block';
+      block.appendChild(h2);
+      block.appendChild(wrap);
+      block.appendChild(br);
+      left.insertBefore(block, infoH2);
+    } catch (e) {
+      log('maybeInsertSourcesSection error', e);
     }
   }
+};
+
+/**
+ * Placeholder rules for future sites.
+ *
+ * To enable these, add them to manifest.json:
+ *   - host_permissions
+ *   - content_scripts.matches
+ */
+const ANILIST_RULE = {
+  id: 'AniList',
+  hosts: [/^(?:.*\.)?anilist\.co$/]
+  // Implement later.
+};
+
+const ANN_RULE = {
+  id: 'ANN',
+  hosts: [/^(?:.*\.)?animenewsnetwork\.com$/]
+  // Implement later.
+};
+
+const SITE_RULES = [MAL_RULE, ANILIST_RULE, ANN_RULE];
+
+function getActiveSiteRule() {
+  const host = window.location.hostname;
+  return SITE_RULES.find((r) => hostMatches(host, r.hosts)) || null;
 }
+
+// ---------------------------------------------------------------------------
+// Dub data
+// ---------------------------------------------------------------------------
 
 async function fetchDubData(language, confidence = 'low') {
   const CACHE_KEY = `dubData_${language}_${confidence}`;
@@ -343,6 +583,7 @@ async function fetchDubData(language, confidence = 'low') {
       [CACHE_KEY]: { timestamp: now, data: json }
     });
 
+    // cleanup legacy cache key
     browser.storage.local.remove(OLD_CACHE_KEY).catch(() => {});
 
     log(`Fetched and cached for language=${language}, confidence=${confidence}`);
@@ -353,258 +594,182 @@ async function fetchDubData(language, confidence = 'low') {
   }
 }
 
-function isTileUnit(anchor) {
-  return anchor.parentElement && anchor.parentElement.classList.contains('tile-unit');
-}
+// ---------------------------------------------------------------------------
+// Annotation engine (site-agnostic)
+// ---------------------------------------------------------------------------
 
-function hasBackgroundImage(anchor) {
-  // Check for inline style
-  const inlineBg = anchor.style.backgroundImage;
-  if (inlineBg && inlineBg !== 'none') return true;
+const activeRule = getActiveSiteRule();
+if (!activeRule) {
+  log('No rule for this site — skipping.');
+} else if (!activeRule.queryAnimeAnchors || !activeRule.isValidAnimeLink || !activeRule.extractAnimeId || !activeRule.injectForAnchor) {
+  log(`Rule '${activeRule.id}' is present but not fully implemented — skipping.`);
+} else {
+  browser.storage.local
+    .get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter', 'mydublistConfidence'])
+    .then(async (data) => {
+      const isEnabled = data.mydublistEnabled ?? true;
+      const filter = data.mydublistFilter || 'all';
+      let language = data.mydublistLanguage;
 
-  // Check computed style
-  const computedBg = getComputedStyle(anchor).backgroundImage;
-  if (computedBg && computedBg !== 'none' && computedBg.includes('url')) return true;
+      if (!language) {
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.startsWith('fr')) language = 'french';
+        else if (browserLang.startsWith('de')) language = 'german';
+        else if (browserLang.startsWith('he')) language = 'hebrew';
+        else if (browserLang.startsWith('hu')) language = 'hungarian';
+        else if (browserLang.startsWith('it')) language = 'italian';
+        else if (browserLang.startsWith('ja')) language = 'japanese';
+        else if (browserLang.startsWith('ko')) language = 'korean';
+        else if (browserLang.startsWith('zh')) language = 'mandarin';
+        else if (browserLang.startsWith('pt')) language = 'portuguese';
+        else if (browserLang.startsWith('es')) language = 'spanish';
+        else if (browserLang.startsWith('tl')) language = 'tagalog';
+        else if (browserLang.startsWith('ru')) language = 'russian';
+        else language = 'english';
 
-  // Check for data-bg attribute (common in lazy-loaded images)
-  if (anchor.hasAttribute('data-bg')) return true;
-
-  // Check for tile units used in the mobile version of MAL
-  if (isTileUnit(anchor)) return true;
-  return false;
-}
-
-async function insertMdlSourcesSection(language){
-  try{
-    const m = window.location.pathname.match(/^\/anime\/(\d+)/);
-    if(!m) return;
-    const malId = parseInt(m[1],10);
-    if (document.getElementById('mydublist-sources-block')) return;
-
-    const res = await fetch(`${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`);
-    if(!res.ok) return;
-    const data = await res.json();
-    const keys = Object.keys(data).filter(k => !k.startsWith('_'));
-    if(!keys.length) return;
-
-    const left = document.querySelector('.leftside');
-    if(!left) return;
-    const infoH2 = Array.from(left.querySelectorAll('h2')).find(h=>h.textContent.trim()==='Information');
-    if(!infoH2) return;
-
-    let sourceCount = 0;
-
-    const h2 = document.createElement('h2');
-
-    const wrap = document.createElement('div');
-    wrap.className = 'external_links';
-    for(const prov of PROVIDER_ORDER){
-      if(!(prov in data)) continue;
-      const url = data[prov];
-      const label = PROVIDER_LABEL[prov] || prov;
-      const ico = faviconUrlFor(prov);
-      if(url){
-        sourceCount++;
-        const a = document.createElement('a');
-        a.href = url;
-        a.className = 'link ga-click';
-        a.setAttribute('data-dubbed-icon','true');
-        const img = document.createElement('img');
-        img.className = 'link_icon';
-        img.alt = 'icon';
-        img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
-        a.appendChild(img);
-        const cap = document.createElement('div');
-        cap.className='caption';
-        cap.textContent = label;
-        a.appendChild(cap);
-        wrap.appendChild(a);
-      }else{
-        const span = document.createElement('span');
-        span.className = 'link';
-        span.setAttribute('data-dubbed-icon','true');
-        const img = document.createElement('img');
-        img.className = 'link_icon';
-        img.alt = 'icon';
-        img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
-        span.appendChild(img);
-        const cap = document.createElement('div');
-        cap.className='caption';
-        cap.textContent = label;
-        span.appendChild(cap);
-        wrap.appendChild(span);
+        browser.storage.local.set({ mydublistLanguage: language });
+        log(`Detected browser language, defaulting to: ${language}`);
       }
-    }
 
-    h2.textContent = `MyDubList Sources (${sourceCount})`;
+      if (!isEnabled) {
+        log('MyDubList is disabled — skipping annotation.');
+        return;
+      }
 
-    const br = document.createElement('br');
-    const block = document.createElement('div');
-    block.id = 'mydublist-sources-block';
-    block.appendChild(h2);
-    block.appendChild(wrap);
-    block.appendChild(br);
-    left.insertBefore(block, infoH2);
-  }catch(e){ log('insertMdlSourcesSection error', e); }
-}
+      const confidence = data.mydublistConfidence || 'low';
+      const dubData = await fetchDubData(language, confidence);
+      if (!dubData) return;
 
-function addDubIconsFromList(dubData, filter, style) {
-  const { dubbed = [], incomplete = [] } = dubData;
-  const dubbedSet = new Set(dubbed);
-  const incompleteSet = new Set(incomplete);
+      const styleSetting = await browser.storage.local.get('mydublistStyle');
+      const style = styleSetting.mydublistStyle || 'style_1';
 
-  const anchors = [...document.querySelectorAll('a[href]')].filter(anchor => {
-    if (anchor.hasAttribute('data-dubbed-icon')) return false;
-    try {
-      const url = new URL(anchor.getAttribute('href'), window.location.origin);
-      return url.pathname.startsWith('/anime/');
-    } catch {
-      return false;
-    }
-  });
+      // Optional per-site extra UI (MAL sources block)
+      if (typeof activeRule.maybeInsertSourcesSection === 'function') {
+        // do not await — keep annotation fast
+        activeRule.maybeInsertSourcesSection(language);
+      }
 
-  anchors.forEach(anchor => {
-    const fullHref = new URL(anchor.getAttribute('href'), window.location.origin).href;
+      const { dubbed = [], incomplete = [] } = dubData;
+      const dubbedSet = new Set(dubbed);
+      const incompleteSet = new Set(incomplete);
 
-    if (!isValidAnimeLink(anchor)) return;
+      // Avoid reprocessing the same anchors (MutationObserver can cause repeats)
+      const processed = new WeakSet();
 
-    const id = extractAnimeId(fullHref);
-    if (!id) return;
+      function annotateAnchors(anchors) {
+        for (const anchor of anchors) {
+          if (!(anchor instanceof HTMLAnchorElement)) continue;
+          if (processed.has(anchor)) continue;
 
-    const isIncomplete = incompleteSet.has(id);
-    const isDubbed = dubbedSet.has(id);
+          // Already annotated by us
+          if (anchor.hasAttribute('data-dubbed-icon')) {
+            processed.add(anchor);
+            continue;
+          }
 
-    applyFilter(anchor, isDubbed, isIncomplete, filter);
+          const href = anchor.getAttribute('href');
+          if (!href) continue;
 
-    if (!isIncomplete && !isDubbed) return;
+          let url;
+          try {
+            url = new URL(href, window.location.origin);
+          } catch {
+            continue;
+          }
 
-    anchor.dataset.dubbedIcon = 'true';
+          // Some sites render anchors first and fill text later; let rules opt-in to retry.
+          if (typeof activeRule.isProcessingReady === 'function' && !activeRule.isProcessingReady(anchor, url)) {
+            continue;
+          }
 
-    if ([...anchor.children].some(child => child.tagName.toLocaleLowerCase() === 'img')) {
-      injectImageOverlayIcon(anchor, isIncomplete, style);
-    } else if (anchor.classList.contains('link-image')) {
-      injectImageOverlayIconSeasonal(anchor, isIncomplete, style);
-    } else if (hasBackgroundImage(anchor)) {
-      injectImageOverlayIconBackground(anchor, isIncomplete, style);
-    } else {
-      const textContainer = anchor.querySelector('.name') || anchor.querySelector('.text') || anchor.querySelector('.title-name');
-      if (textContainer) {
-        if (!/[\s\u00A0]$/.test(textContainer.textContent || '')) {
-          // Do not add space in search results as they add it dynamically
-          if (!anchor.querySelector('.name ')) {
-            textContainer.insertAdjacentText('beforeend', '\u00A0');
+          // From this point on, treat this anchor as stable for the current run.
+          processed.add(anchor);
+
+          if (!activeRule.isValidAnimeLink(anchor, url)) continue;
+
+          const id = activeRule.extractAnimeId(url.href);
+          if (!id) continue;
+
+          const isDubbed = dubbedSet.has(id);
+          const isIncomplete = incompleteSet.has(id);
+          log(`Checking anime id: ${id} (isDubbed: ${isDubbed}, isIncomplete: ${isIncomplete})`);
+
+          if (typeof activeRule.applyFilter === 'function') {
+            activeRule.applyFilter(anchor, isDubbed, isIncomplete, filter);
+          }
+
+          if (!isIncomplete && !isDubbed) continue;
+
+          anchor.dataset.dubbedIcon = 'true';
+          activeRule.injectForAnchor(anchor, isIncomplete, style);
+        }
+
+        // Optional: annotate the anime page title
+        if (typeof activeRule.annotateTitle === 'function') {
+          activeRule.annotateTitle(dubbedSet, incompleteSet, style);
+        }
+      }
+
+      function scan(root) {
+        const anchors = activeRule.queryAnimeAnchors(root);
+        annotateAnchors(anchors);
+      }
+
+      // Initial scan
+      scan(document);
+
+      // Debounced + scoped MutationObserver for dynamic pages
+      let mutationTimeout = null;
+      const pendingRoots = new Set();
+
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const n of m.addedNodes) {
+            if (n.nodeType === Node.ELEMENT_NODE) pendingRoots.add(n);
           }
         }
-        textContainer.appendChild(createIcon(isIncomplete, true, style));
-      } else {
-        const anchorText = anchor.textContent || '';
-        if (!/[\s\u00A0]$/.test(anchorText)) {
-          anchor.insertAdjacentHTML('beforeend', '&nbsp;');
-        }
-        anchor.appendChild(createIcon(isIncomplete, true, style));
-      }
-    }
 
-    log(`Icon added for ID: ${id}`);
-  });
+        if (mutationTimeout !== null) return;
+        mutationTimeout = setTimeout(() => {
+          mutationTimeout = null;
 
-  const titleEl = document.querySelector('.title-name strong');
-  if (titleEl && !document.querySelector('.title-name .mydublist-icon')) {
-    const idMatch = window.location.href.match(/\/anime\/(\d+)/);
-    if (idMatch) {
-      const animeId = parseInt(idMatch[1], 10);
-      const isIncomplete = incompleteSet.has(animeId);
-      const isDubbed = dubbedSet.has(animeId);
-      if (isIncomplete || isDubbed) {
-        titleEl.insertAdjacentElement('afterend', createIcon(isIncomplete, false, style));
-      }
-      const titleContainer = document.querySelector('.h1-title');
-      if (titleContainer) {
-        titleContainer.style.display = 'flex';
-        titleContainer.style.alignItems = 'center';
-      }
-    }
-  }
+          const roots = [...pendingRoots];
+          pendingRoots.clear();
 
-  log('Annotation complete.');
+          // If too much changed, fallback to a full scan (rare)
+          if (roots.length > 50) {
+            scan(document);
+            return;
+          }
+
+          for (const r of roots) scan(r);
+        }, 100);
+      });
+
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      log(`Annotation active for site rule: ${activeRule.id}`);
+    });
 }
 
-browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistFilter', 'mydublistConfidence'])
-  .then(async (data) => {
-    const isEnabled = data.mydublistEnabled ?? true;
-    const filter = data.mydublistFilter || 'all';
-    let language = data.mydublistLanguage;
+// Lazyload hook (keeps overlay badge sized correctly)
+document.addEventListener(
+  'lazyloaded',
+  (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement)) return;
 
-    if (!language) {
-      const browserLang = navigator.language.toLowerCase();
-      if (browserLang.startsWith('fr')) language = 'french';
-      else if (browserLang.startsWith('de')) language = 'german';
-      else if (browserLang.startsWith('he')) language = 'hebrew';
-      else if (browserLang.startsWith('hu')) language = 'hungarian';
-      else if (browserLang.startsWith('it')) language = 'italian';
-      else if (browserLang.startsWith('ja')) language = 'japanese';
-      else if (browserLang.startsWith('ko')) language = 'korean';
-      else if (browserLang.startsWith('zh')) language = 'mandarin';
-      else if (browserLang.startsWith('pt')) language = 'portuguese';
-      else if (browserLang.startsWith('es')) language = 'spanish';
-      else if (browserLang.startsWith('tl')) language = 'tagalog';
-      else if (browserLang.startsWith('ru')) language = 'russian';
-      else language = 'english';
+    const container = img.closest('.image') || img.closest('a') || img.parentElement;
+    if (!container) return;
 
-      browser.storage.local.set({ mydublistLanguage: language });
-      log(`Detected browser language, defaulting to: ${language}`);
-    }
+    const span = container.querySelector('.mydublist-icon') || container.parentElement?.querySelector('.mydublist-icon');
+    if (!span) return;
 
-    if (!isEnabled) {
-      log('MyDubList is disabled — skipping annotation');
-      return;
-    }
+    sizeIcon(span, container, img);
+    scheduleFinalSizing(container, span, img);
 
-    const confidence = data.mydublistConfidence || 'low';
-    const dubData = await fetchDubData(language, confidence);
-    insertMdlSourcesSection(language);
-    if (!dubData) return;
-
-    const styleSetting = await browser.storage.local.get('mydublistStyle');
-    const style = styleSetting.mydublistStyle || 'style_1';
-
-    addDubIconsFromList(dubData, filter, style);
-
-    // Debounced mutation observer for infinite scroll / dynamic inserts
-    let mutationTimeout = null;
-    const observer = new MutationObserver(() => {
-      if (mutationTimeout !== null) return;
-      mutationTimeout = setTimeout(() => {
-        mutationTimeout = null;
-        addDubIconsFromList(dubData, filter, style);
-      }, 100);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-
-// Lazyload hook
-document.addEventListener('lazyloaded', (e) => {
-  const img = e.target;
-  if (!(img instanceof HTMLImageElement)) return;
-
-  // Find the container we measure against
-  const container =
-    img.closest('.image') ||
-    img.closest('a') ||
-    img.parentElement;
-
-  if (!container) return;
-
-  // Find the matching badge
-  const span =
-    container.querySelector('.mydublist-icon') ||
-    container.parentElement?.querySelector('.mydublist-icon');
-
-  if (!span) return;
-
-  sizeIcon(span, container, img);
-  scheduleFinalSizing(container, span, img);
-
-  mdlImgRO.observe(img);
-  mdlIconRO.observe(container);
-}, true);
+    mdlImgRO.observe(img);
+    mdlIconRO.observe(container);
+  },
+  true
+);
