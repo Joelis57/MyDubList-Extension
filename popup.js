@@ -17,8 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     .then((data) => {
       enabledCheckbox.checked = data.mydublistEnabled ?? true;
       languageSelect.value = data.mydublistLanguage || 'english';
-      styleSelect.value = data.mydublistStyle || 'style_1';
       filterSelect.value = data.mydublistFilter || 'all';
+      confidenceSelect.value = data.mydublistConfidence || 'low';
+      styleSelect.value = data.mydublistStyle || 'style_1';
     });
 
   enabledCheckbox.addEventListener('change', () => {
@@ -32,7 +33,12 @@ document.addEventListener('DOMContentLoaded', () => {
     browser.storage.local.get('mydublistLanguage').then((data) => {
       const oldLang = data.mydublistLanguage;
       if (oldLang && oldLang !== newLang) {
-        browser.storage.local.remove(`dubData_${oldLang}`);
+        browser.storage.local.get(null).then((all) => {
+          const keysToRemove = Object.keys(all).filter((k) =>
+            k === `dubData_${oldLang}` || k.startsWith(`dubData_${oldLang}_`)
+          );
+          if (keysToRemove.length) browser.storage.local.remove(keysToRemove);
+        });
       }
     });
 
