@@ -10,6 +10,53 @@ function log(...args) {
 
 const API_BASE = 'https://api.mydublist.com';
 
+
+// ------------------------------------------------------
+// MyDubList API helpers (dedupe + caching to avoid spam)
+// ------------------------------------------------------
+const __mdlSourcesCache = new Map(); // key -> { ts, data }
+const __mdlSourcesInFlight = new Map(); // key -> Promise<data|null>
+const __MDL_SOURCES_TTL_OK = 10 * 60 * 1000;   // 10 minutes
+const __MDL_SOURCES_TTL_NEG = 30 * 1000;       // 30 seconds (avoid hammering on failures)
+
+async function mdlGetAnimeSources(malId, language) {
+  const key = `${malId}|${language}`;
+  const now = Date.now();
+
+  const cached = __mdlSourcesCache.get(key);
+  if (cached) {
+    const ttl = cached.data ? __MDL_SOURCES_TTL_OK : __MDL_SOURCES_TTL_NEG;
+    if (now - cached.ts < ttl) return cached.data;
+  }
+
+  const inflight = __mdlSourcesInFlight.get(key);
+  if (inflight) return inflight;
+
+  const p = (async () => {
+    try {
+      const url = `${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`;
+      const res = await fetch(url, { credentials: 'omit' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  })()
+    .then((data) => {
+      __mdlSourcesCache.set(key, { ts: Date.now(), data });
+      __mdlSourcesInFlight.delete(key);
+      return data;
+    })
+    .catch(() => {
+      __mdlSourcesCache.set(key, { ts: Date.now(), data: null });
+      __mdlSourcesInFlight.delete(key);
+      return null;
+    });
+
+  __mdlSourcesInFlight.set(key, p);
+  return p;
+}
+
 const PROVIDER_ORDER = ['MAL', 'AniList', 'ANN', 'aniSearch', 'AnimeSchedule', 'Kitsu', 'HiAnime', 'Kenny', 'Manual', 'NSFW'];
 const PROVIDER_LABEL = {
   MAL: 'MyAnimeList',
@@ -22,6 +69,18 @@ const PROVIDER_LABEL = {
   Kenny: 'Kenny Forum',
   Manual: 'Manual',
   NSFW: 'NSFW'
+};
+const PROVIDER_COLOR = {
+  MAL: '#2E51A2e0',
+  AniList: '#02A9FFE0',
+  ANN: '#d5eb9a',
+  aniSearch: '#fd945bff',
+  AnimeSchedule: '#4078c5',
+  Kitsu: '#fb7460',
+  HiAnime: '#2f2b4f',
+  Kenny: '#2E51A2e0',
+  Manual: '#6B7280e0',
+  NSFW: '#EF4444e0'
 };
 
 const FAVICON_DOMAIN = {
@@ -51,6 +110,106 @@ mdlFontStyle.rel = 'stylesheet';
 mdlFontStyle.href = browser.runtime.getURL('fonts/style.css');
 document.head.appendChild(mdlFontStyle);
 
+// Extra site-specific CSS (safe no-ops on other sites)
+(function ensureMyDubListExtraCss() {
+  if (document.getElementById('mydublist-extra-style')) return;
+  const style = document.createElement('style');
+  style.id = 'mydublist-extra-style';
+  style.textContent = `
+.media-preview-card.small.mydublist-hide-neighbor-icons .mydublist-icon.icon-dubs-image {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+`;
+  document.head.appendChild(style);
+})();
+
+// ------------------------------------------------------
+// AniList hover helper: hide neighbor badges for small preview cards
+// ------------------------------------------------------
+(function setupAniListPreviewNeighborHide() {
+  if (window.__mydublistPreviewNeighborHideSetup) return;
+  window.__mydublistPreviewNeighborHideSetup = true;
+
+  const HIDE_CLASS = 'mydublist-hide-neighbor-icons';
+  let currentCard = null;
+  let hiddenCards = [];
+
+  function clearHidden() {
+    for (const c of hiddenCards) c.classList.remove(HIDE_CLASS);
+    hiddenCards = [];
+  }
+
+  function collectNeighborSmallCards(card, count) {
+    const out = [];
+    const goLeft = card.classList.contains('info-left'); // <-- key change
+    let node = card;
+
+    while (out.length < count) {
+      node = goLeft ? node.previousElementSibling : node.nextElementSibling;
+      if (!node) break;
+
+      if (node.classList?.contains('media-preview-card') && node.classList.contains('small')) {
+        out.push(node);
+      }
+    }
+    return out;
+  }
+
+  function isEntering(el, relatedTarget) {
+    return !relatedTarget || (relatedTarget !== el && !el.contains(relatedTarget));
+  }
+
+  function onOver(e) {
+    const card = e.target && e.target.closest ? e.target.closest('.media-preview-card.small') : null;
+    if (!card) return;
+    if (!isEntering(card, e.relatedTarget)) return;
+
+    if (currentCard && currentCard !== card) {
+      clearHidden();
+    }
+    currentCard = card;
+
+    const neighbors = collectNeighborSmallCards(card, 2);
+    clearHidden();
+    for (const n of neighbors) n.classList.add(HIDE_CLASS);
+    hiddenCards = neighbors;
+  }
+
+  function onOut(e) {
+    const card = e.target && e.target.closest ? e.target.closest('.media-preview-card.small') : null;
+    if (!card) return;
+    if (!isEntering(card, e.relatedTarget)) return; // leaving to a child; ignore
+
+    if (currentCard === card) {
+      clearHidden();
+      currentCard = null;
+    }
+  }
+
+  document.addEventListener('mouseover', onOver, true);
+  document.addEventListener('mouseout', onOut, true);
+})();
+
+function ensureAniListSourcesPlacement(block, tries = 25) {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || !block) return;
+
+  const tags = sidebar.querySelector(':scope > .tags');
+  if (tags) {
+    // Move it right before tags (even if it already exists elsewhere)
+    if (block.nextElementSibling !== tags) {
+      sidebar.insertBefore(block, tags);
+    }
+    return;
+  }
+
+  // Tags might not exist yet on first navigation; retry a bit.
+  if (tries > 0) {
+    setTimeout(() => ensureAniListSourcesPlacement(block, tries - 1), 120);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Badge UI (shared)
 // ---------------------------------------------------------------------------
@@ -71,7 +230,7 @@ function createOverlayIconSpan(isPartial, style) {
 }
 
 const ICON_CFG = {
-  minFont: 13,
+  minFont: 16,
   maxFont: 50,
   perPx: 0.14,
   widthCap: 220,
@@ -244,23 +403,157 @@ function injectImageOverlayIconSeasonal(anchor, isPartial, style = 'style_1') {
 
 // 3) Background-image case
 function injectImageOverlayIconBackground(anchor, isPartial, style = 'style_1') {
+  // Default target is the anchor itself, but some AniList layouts (recommendation cards)
+  // put the background-image on a parent ".cover" div while the clickable link is a child
+  // <a class="cover-link">. In that case we append the badge to the parent so it sits
+  // above other overlays (rating-wrap), and we still bind hover behavior to the link.
+  let target = anchor;
+
+  const isRecCoverLink =
+    anchor instanceof HTMLAnchorElement &&
+    anchor.classList.contains('cover-link') &&
+    anchor.closest('.recommendation-card');
+
+  if (isRecCoverLink) {
+    const coverDiv = anchor.closest('.cover');
+    if (coverDiv && coverDiv !== anchor) target = coverDiv;
+  }
+
+  // Prevent duplicates (check both the link and the target container)
   if (anchor.querySelector('.mydublist-icon')) return;
+  if (target !== anchor && target.querySelector(':scope > .mydublist-icon')) return;
 
   const span = createOverlayIconSpan(isPartial, style);
 
-  if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
+  if (getComputedStyle(target).position === 'static') target.style.position = 'relative';
+
+  // Ensure the badge renders above AniList overlays inside covers.
+  span.style.zIndex = '1000';
 
   maybeHideOnHover(anchor, span);
-  anchor.appendChild(span);
+  target.appendChild(span);
 
-  ensureMeasurableAnchor(anchor);
+  // Make sure sizing works even if the link itself has no intrinsic size.
+  ensureMeasurableAnchor(target);
 
-  const box = pickSizingBoxForBackground(anchor);
+  const box = pickSizingBoxForBackground(target);
 
   sizeIcon(span, box, null);
   scheduleFinalSizing(box, span, null);
   mdlIconRO.observe(box);
-  if (box !== anchor) mdlIconRO.observe(anchor);
+  if (box !== target) mdlIconRO.observe(target);
+}
+
+
+// ---------------------------------------------------------------------------
+// JSONL mapping helper (shared)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a JSONL mapping file and return a Map<fromId, toId> for the requested ids.
+ * The JSONL is expected to be one JSON object per line, e.g.:
+ *   {"mal_id":1,"anilist_id":1}
+ *
+ * This is optimized for "lookup a small set of ids":
+ * - It streams the response line-by-line when possible
+ * - It stops early (aborts the request) once all requested ids have been found
+ */
+async function fetchJsonlIdMap(url, fromField, toField, ids, label = 'JSONL mapping') {
+  const want = new Set((ids || []).filter((n) => Number.isFinite(n)));
+  const out = new Map();
+  if (!want.size) return out;
+
+  const controller = new AbortController();
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+
+    // Streaming path (preferred)
+    if (res.body && typeof res.body.getReader === 'function') {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+
+          try {
+            const obj = JSON.parse(line);
+            const from = obj?.[fromField];
+            const to = obj?.[toField];
+
+            if (want.has(from) && Number.isFinite(to) && to > 0) {
+              out.set(from, to);
+              want.delete(from);
+
+              if (!want.size) {
+                controller.abort(); // stop download early
+                break;
+              }
+            }
+          } catch {
+            // ignore malformed lines
+          }
+        }
+
+        if (!want.size) break;
+      }
+
+      // Flush remaining buffer
+      const last = buf.trim();
+      if (want.size && last) {
+        try {
+          const obj = JSON.parse(last);
+          const from = obj?.[fromField];
+          const to = obj?.[toField];
+          if (want.has(from) && Number.isFinite(to) && to > 0) out.set(from, to);
+        } catch {
+          // ignore
+        }
+      }
+
+      return out;
+    }
+
+    // Fallback (no streaming available)
+    const txt = await res.text();
+    for (const rawLine of txt.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      try {
+        const obj = JSON.parse(line);
+        const from = obj?.[fromField];
+        const to = obj?.[toField];
+
+        if (want.has(from) && Number.isFinite(to) && to > 0) {
+          out.set(from, to);
+          want.delete(from);
+          if (!want.size) break;
+        }
+      } catch {
+        // ignore malformed lines
+      }
+    }
+
+    return out;
+  } catch (e) {
+    // If we aborted intentionally, treat as success.
+    if (controller.signal.aborted) return out;
+    log(`${label} fetch failed`, e);
+    return out;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -530,21 +823,372 @@ const MAL_RULE = {
 };
 
 /**
- * Placeholder rules for future sites.
- *
- * To enable these, add them to manifest.json:
- *   - host_permissions
- *   - content_scripts.matches
+ * AniList rule
  */
 const ANILIST_RULE = {
   id: 'AniList',
-  hosts: [/^(?:.*\.)?anilist\.co$/]
-  // Implement later.
+  hosts: [/^(?:.*\.)?anilist\.co$/],
+
+  // URL patterns
+  // Examples:
+  //   /anime/167152/Some-Title/
+  //   /anime/172463/Some-Title/characters
+  animePathRegex: /^\/anime\/(\d+)(\/[^\/]*)?\/?$/,
+  animeAnyTabRegex: /^\/anime\/(\d+)(?:\/[^\/]*)?(?:\/.*)?\/?$/,
+  animeIdRegex: /^\/anime\/(\d+)/,
+
+  // Internal cache: AniList id -> MAL id
+  _idMap: new Map(),
+  _storageKeyPrefix: 'mydublist_anilist_to_mal_',
+  _prefetchLock: null,
+
+  // Sources section state (per SPA navigation)
+  _sourcesLock: null,
+  _sourcesLastKey: null,
+
+  hasBackgroundImage(anchor) {
+  const hasBg = (el) => {
+    if (!el) return false;
+    const inlineBg = el.style && el.style.backgroundImage;
+    if (inlineBg && inlineBg !== 'none' && inlineBg.includes('url')) return true;
+
+    const computedBg = getComputedStyle(el).backgroundImage;
+    if (computedBg && computedBg !== 'none' && computedBg.includes('url')) return true;
+
+    if (el.hasAttribute && el.hasAttribute('data-src')) return true;
+    return false;
+  };
+
+  if (hasBg(anchor)) return true;
+
+  // AniList recommendation cards: the image is on a parent ".cover" div, while the clickable link is ".cover-link".
+  if (anchor instanceof HTMLElement && anchor.classList.contains('cover-link')) {
+    const cover = anchor.closest('.cover');
+    if (cover && cover !== anchor && hasBg(cover)) return true;
+  }
+
+  return false;
+},
+
+  getCurrentPageAnimeId() {
+    const m = window.location.pathname.match(this.animeAnyTabRegex);
+    return m ? parseInt(m[1], 10) : null;
+  },
+
+  isValidAnimeLink(anchor, url) {
+    // Only match base anime pages (no /characters, /staff, etc.) for link injection.
+    if (!this.animePathRegex.test(url.pathname)) return false;
+
+    if (anchor.dataset.dubbedIcon === 'true') return false;
+
+    // Avoid annotating UI nav links (if they ever match in the future)
+    if (anchor.closest('.nav')) return false;
+
+    return true;
+  },
+
+  extractAnimeId(url) {
+    const path = new URL(url, window.location.origin).pathname;
+    const m = path.match(this.animeIdRegex);
+    return m ? parseInt(m[1], 10) : null;
+  },
+
+  resolveLookupId(anilistId) {
+    return this._idMap.get(anilistId) || null;
+  },
+
+  // JSONL mapping file (AniList id -> MAL id)
+  _mappingsUrl: 'https://raw.githubusercontent.com/Joelis57/MyDubList/main/dubs/mappings/mappings_anilist.jsonl',
+
+  async _fetchMappingsFromJsonl(ids) {
+    return fetchJsonlIdMap(this._mappingsUrl, 'anilist_id', 'mal_id', ids, 'AniList mappings');
+  },
+
+  async prefetchLookupIds(anilistIds) {
+    // Serialize prefetches so overlapping scans don't double-fetch.
+    const run = async () => {
+      const unique = [...new Set(anilistIds)].filter((n) => Number.isFinite(n));
+      if (!unique.length) return;
+
+      const missing = unique.filter((id) => !this._idMap.has(id));
+      if (!missing.length) return;
+
+      // Load from storage first
+      const keys = missing.map((id) => this._storageKeyPrefix + id);
+      const stored = await browser.storage.local.get(keys);
+      for (const id of missing) {
+        const v = stored[this._storageKeyPrefix + id];
+        if (Number.isFinite(v) && v > 0) this._idMap.set(id, v);
+      }
+
+      const stillMissing = missing.filter((id) => !this._idMap.has(id));
+      if (!stillMissing.length) return;
+
+      const fetched = await this._fetchMappingsFromJsonl(stillMissing);
+      if (!fetched.size) return;
+
+      const toStore = {};
+      for (const [aid, mid] of fetched.entries()) {
+        this._idMap.set(aid, mid);
+        toStore[this._storageKeyPrefix + aid] = mid;
+      }
+      await browser.storage.local.set(toStore);
+    };
+
+    this._prefetchLock = (this._prefetchLock || Promise.resolve()).then(run, run);
+    return this._prefetchLock;
+  },
+
+  chooseOverlayMode(anchor) {
+    if (anchor.querySelector('img')) return 'img';
+    if (this.hasBackgroundImage(anchor)) return 'background';
+    return 'text';
+  },
+
+  injectForAnchor(anchor, isPartial, style) {
+    const mode = this.chooseOverlayMode(anchor);
+    if (mode === 'img') {
+      injectImageOverlayIcon(anchor, isPartial, style);
+      return;
+    }
+    if (mode === 'background') {
+      injectImageOverlayIconBackground(anchor, isPartial, style);
+      return;
+    }
+
+    // Text link
+    // Avoid duplicates on card layouts where we already overlay the badge on the cover image.
+    const previewCard = anchor.closest('.media-preview-card');
+    if (previewCard) {
+      const cover = previewCard.querySelector('a.cover[href^="/anime/"], a.cover[href^="https://anilist.co/anime/"]');
+      if (cover) return;
+    }
+    const recCard = anchor.closest('.recommendation-card');
+    if (recCard) {
+      const coverLink = recCard.querySelector('a.cover-link[href^="/anime/"], a.cover-link[href^="https://anilist.co/anime/"]');
+      if (coverLink) return;
+    }
+
+    if (!anchor.textContent.trim()) return;
+    if (!/[ \s]$/.test(anchor.textContent)) anchor.appendChild(document.createTextNode('\u00A0'));
+    anchor.appendChild(createTitleIcon(isPartial, true, style));
+  },
+
+  annotateTitle(dubbedSet, partialSet, style) {
+    const anilistId = this.getCurrentPageAnimeId();
+    if (!anilistId) return;
+
+    const malId = this.resolveLookupId(anilistId);
+    if (!malId) return;
+
+    // Only add once
+    const h1 =
+      document.querySelector('.media .header .content h1') ||
+      document.querySelector('.media .content h1') ||
+      document.querySelector('h1');
+    if (!h1) return;
+    if (h1.querySelector('.mydublist-icon')) return;
+
+    const isPartial = partialSet.has(malId);
+    const isDubbed = dubbedSet.has(malId);
+    if (!isPartial && !isDubbed) return;
+
+    if (!/[ \s]$/.test(h1.textContent || '')) h1.appendChild(document.createTextNode('\u00A0'));
+    const titleIcon = createTitleIcon(isPartial, false, style);
+    titleIcon.style.setProperty('font-size', '1em', 'important');
+    h1.appendChild(titleIcon);
+
+    h1.style.display = 'inline-flex';
+    h1.style.alignItems = 'center';
+    h1.style.gap = '0px';
+  },
+
+  async maybeInsertSourcesSection(language) {
+  try {
+    const anilistId = this.getCurrentPageAnimeId();
+    if (!anilistId) return;
+
+    // Ensure we have a MAL id (SPA navigations can land on a page before the mapping is cached)
+    await this.prefetchLookupIds([anilistId]);
+    const malId = this.resolveLookupId(anilistId);
+    if (!malId) return;
+
+    const key = `${language}:${malId}`;
+    const existing = document.getElementById('mydublist-sources-anilist');
+    if (existing && existing.getAttribute('data-mdl-key') === key) {
+      ensureAniListSourcesPlacement(existing);
+      return;
+    }
+
+    // Serialize updates so repeated DOM mutations don't trigger repeated fetches.
+    const run = async () => {
+      const ex = document.getElementById('mydublist-sources-anilist');
+      if (ex && ex.getAttribute('data-mdl-key') === key) return;
+
+      // Fetch (cached + de-duped) — prevents spamming when CORS/network fails.
+      const data = await mdlGetAnimeSources(malId, language);
+      if (!data) return;
+
+      const providerKeys = Object.keys(data).filter((k) => !k.startsWith('_') && !!data[k]);
+      if (!providerKeys.length) return;
+
+      const sidebar = document.querySelector('.sidebar');
+      if (!sidebar) return;
+
+      // Build a block that matches AniList's "External & Streaming links" styling.
+      // AniList uses scoped CSS (data-v-xxxx attributes), so we clone an existing block if available.
+      const externalTpl = sidebar.querySelector(':scope > .external-links');
+      let block, wrap, h2, linkTpl;
+
+      if (externalTpl) {
+        block = externalTpl.cloneNode(true);
+        block.id = 'mydublist-sources-anilist';
+        block.setAttribute('data-mdl-sources', 'true');
+        block.classList.add('mydublist-sources');
+
+        h2 = block.querySelector('h2') || block.querySelector(':scope > h2');
+        if (h2) h2.textContent = 'MyDubList Sources';
+
+        wrap = block.querySelector('.external-links-wrap') || block.querySelector(':scope > .external-links-wrap');
+        if (wrap) wrap.innerHTML = '';
+
+        linkTpl = externalTpl.querySelector('.external-links-wrap .external-link');
+      } else {
+        // Fallback (should be rare)
+        block = document.createElement('div');
+        block.id = 'mydublist-sources-anilist';
+        block.setAttribute('data-mdl-sources', 'true');
+        block.className = 'external-links mydublist-sources';
+
+        h2 = document.createElement('h2');
+        h2.textContent = 'MyDubList Sources';
+        block.appendChild(h2);
+
+        wrap = document.createElement('div');
+        wrap.className = 'external-links-wrap';
+        block.appendChild(wrap);
+
+        linkTpl = null;
+      }
+
+      let sourceCount = 0;
+
+      for (const prov of PROVIDER_ORDER) {
+        if (!(prov in data)) continue;
+        const url = data[prov];
+        if (!url) continue;
+
+        sourceCount++;
+        const label = PROVIDER_LABEL[prov] || prov;
+        const ico = faviconUrlFor(prov);
+
+        let a;
+        if (linkTpl) {
+          a = linkTpl.cloneNode(true);
+        } else {
+          a = document.createElement('a');
+          a.className = 'external-link';
+        }
+
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+
+        // Do not annotate icons inside the MyDubList Sources block
+        a.setAttribute('data-mdl-no-annotate', 'true');
+
+        // Make these links behave like AniList external links (hover color from --link-color)
+        a.classList.add('external-link');
+        a.classList.remove('no-color');
+        const linkColor = (typeof PROVIDER_COLOR !== 'undefined' && PROVIDER_COLOR[prov]) ? PROVIDER_COLOR[prov] : 'nulle0';
+        a.style.setProperty('--link-color', linkColor);
+
+
+        const iconWrap = a.querySelector('.icon-wrap') || a.querySelector(':scope > div');
+        if (iconWrap) {
+          iconWrap.innerHTML = '';
+
+          // Ensure no permanent background color behind favicons (use --link-color hover styling instead)
+          iconWrap.style.setProperty('background', 'transparent', 'important');
+          iconWrap.style.setProperty('background-color', 'transparent', 'important');
+
+          if (ico) {
+            const img = document.createElement('img');
+            img.className = 'icon';
+            img.alt = label;
+            img.src = ico;
+
+            // Force a sane icon size in case scoped CSS doesn't apply to our injected nodes.
+            img.style.width = '16px';
+            img.style.height = '16px';
+            img.style.objectFit = 'contain';
+
+            iconWrap.appendChild(img);
+          } else {
+            iconWrap.textContent = '🔗';
+            iconWrap.style.display = 'flex';
+            iconWrap.style.alignItems = 'center';
+            iconWrap.style.justifyContent = 'center';
+          }
+        }
+
+        const nameEl = a.querySelector('.name') || a.querySelector('span');
+        if (nameEl) {
+          nameEl.textContent = label;
+        } else {
+          const name = document.createElement('span');
+          name.className = 'name';
+          name.textContent = label;
+          a.appendChild(name);
+        }
+
+        wrap.appendChild(a);
+      }
+
+      if (!sourceCount) return;
+
+      if (h2) h2.textContent = `MyDubList Sources (${sourceCount})`;
+
+      // Replace any previous block (e.g., after SPA navigation or setting change)
+      const old = document.getElementById('mydublist-sources-anilist');
+      if (old) old.remove();
+
+      block.setAttribute('data-mdl-key', key);
+
+      // Insert specifically between "data" and "tags" (or just before tags if structure changes).
+      const tags = sidebar.querySelector(':scope > .tags');
+      if (tags) sidebar.insertBefore(block, tags);
+      else sidebar.appendChild(block);
+
+      ensureAniListSourcesPlacement(block);
+
+      this._sourcesLastKey = key;
+    };
+
+    this._sourcesLock = (this._sourcesLock || Promise.resolve()).then(run, run);
+    return this._sourcesLock;
+  } catch (e) {
+    log('AniList maybeInsertSourcesSection error', e);
+  }
+},
+
+  queryAnimeAnchors(root) {
+    const scope = root && root.nodeType === Node.ELEMENT_NODE ? root : document;
+
+    // Common AniList patterns:
+    // - cards & relations: <a class="cover" href="/anime/<id>/<slug>/"> ...
+    // - text links: <a href="/anime/<id>/<slug>/">Title</a>
+    const candidates = scope.querySelectorAll('a[href^="/anime/"], a[href^="https://anilist.co/anime/"]');
+    return [...candidates].filter(a => !a.closest('[data-mdl-sources]'));
+
+  }
 };
 
 const ANN_RULE = {
   id: 'ANN',
-  hosts: [/^(?:.*\.)?animenewsnetwork\.com$/]
+  hosts: [/^(?:.*\.)?animenewsnetwork\.com$/],
+  _mappingsUrl: 'https://raw.githubusercontent.com/Joelis57/MyDubList/main/dubs/mappings/mappings_ann.jsonl'
+
   // Implement later.
 };
 
@@ -643,10 +1287,8 @@ if (!activeRule) {
       const styleSetting = await browser.storage.local.get('mydublistStyle');
       const style = styleSetting.mydublistStyle || 'style_1';
 
-      // Optional per-site extra UI (MAL sources block)
-      if (typeof activeRule.maybeInsertSourcesSection === 'function') {
-        // do not await — keep annotation fast
-        activeRule.maybeInsertSourcesSection(language);
+      if (activeRule?.id === 'AniList' && typeof activeRule.maybeInsertSourcesSection === 'function') {
+        try { activeRule.maybeInsertSourcesSection(language); } catch {}
       }
 
       const { dubbed = [], partial = [] } = dubData;
@@ -660,6 +1302,12 @@ if (!activeRule) {
         for (const anchor of anchors) {
           if (!(anchor instanceof HTMLAnchorElement)) continue;
           if (processed.has(anchor)) continue;
+
+          // Skip any anchors explicitly marked as non-annotatable (e.g., MyDubList Sources block)
+          if (anchor.hasAttribute('data-mdl-no-annotate') || anchor.closest('[data-mdl-sources]')) {
+            processed.add(anchor);
+            continue;
+          }
 
           // Already annotated by us
           if (anchor.hasAttribute('data-dubbed-icon')) {
@@ -682,17 +1330,32 @@ if (!activeRule) {
             continue;
           }
 
+          if (!activeRule.isValidAnimeLink(anchor, url)) {
+            processed.add(anchor);
+            continue;
+          }
+
+          // Extract the site's id (MAL id on MAL, AniList id on AniList, etc.)
+          const rawId = activeRule.extractAnimeId(url.href);
+          if (!rawId) {
+            processed.add(anchor);
+            continue;
+          }
+
+          // Some sites need an additional mapping step (e.g., AniList -> MAL).
+          const lookupId = typeof activeRule.resolveLookupId === 'function' ? activeRule.resolveLookupId(rawId, url.href) : rawId;
+          if (!lookupId) {
+            // If mapping is unavailable, treat as processed for this run.
+            processed.add(anchor);
+            continue;
+          }
+
           // From this point on, treat this anchor as stable for the current run.
           processed.add(anchor);
 
-          if (!activeRule.isValidAnimeLink(anchor, url)) continue;
-
-          const id = activeRule.extractAnimeId(url.href);
-          if (!id) continue;
-
-          const isDubbed = dubbedSet.has(id);
-          const isPartial = partialSet.has(id);
-          log(`Checking anime id: ${id} (isDubbed: ${isDubbed}, isPartial: ${isPartial})`);
+          const isDubbed = dubbedSet.has(lookupId);
+          const isPartial = partialSet.has(lookupId);
+          log(`Checking anime id: ${lookupId} (isDubbed: ${isDubbed}, isPartial: ${isPartial})`);
 
           if (typeof activeRule.applyFilter === 'function') {
             activeRule.applyFilter(anchor, isDubbed, isPartial, filter);
@@ -710,13 +1373,59 @@ if (!activeRule) {
         }
       }
 
-      function scan(root) {
+      async function scan(root) {
         const anchors = activeRule.queryAnimeAnchors(root);
+
+        // Some sites need to prefetch id mappings before we can check dub lists.
+        if (typeof activeRule.prefetchLookupIds === 'function') {
+          const ids = new Set();
+
+          for (const a of anchors) {
+            if (!(a instanceof HTMLAnchorElement)) continue;
+            if (processed.has(a)) continue;
+            if (a.hasAttribute('data-dubbed-icon')) continue;
+
+            const href = a.getAttribute('href');
+            if (!href) continue;
+
+            try {
+              const u = new URL(href, window.location.origin);
+              const rid = activeRule.extractAnimeId(u.href);
+              if (Number.isFinite(rid)) ids.add(rid);
+            } catch {
+              // ignore
+            }
+          }
+
+          // Also prefetch mapping for the current page's anime (so annotateTitle can work).
+          if (typeof activeRule.getCurrentPageAnimeId === 'function') {
+            const pageId = activeRule.getCurrentPageAnimeId();
+            if (Number.isFinite(pageId)) ids.add(pageId);
+          }
+
+          if (ids.size) {
+            try {
+              await activeRule.prefetchLookupIds([...ids]);
+            } catch (e) {
+              log('prefetchLookupIds failed', e);
+            }
+          }
+        }
+
+        // Keep per-site sidebar extras in sync on SPAs (e.g., AniList navigation)
+        if (typeof activeRule.maybeInsertSourcesSection === 'function') {
+          try {
+            activeRule.maybeInsertSourcesSection(language);
+          } catch (e) {
+            // ignore
+          }
+        }
+
         annotateAnchors(anchors);
       }
 
       // Initial scan
-      scan(document);
+      await scan(document);
 
       // Debounced + scoped MutationObserver for dynamic pages
       let mutationTimeout = null;

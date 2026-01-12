@@ -1,10 +1,19 @@
 {
   "manifest_version": 3,
   "name": "MyDubList",
-  "version": "1.5.0",
-  "description": "Marks dubbed anime in YOUR language on MyAnimeList and let's you filter them.",
+  "version": "2.0.0",
+  "description": "Marks dubbed anime in YOUR language on MyAnimeList and AniList and lets you filter them.",
   "permissions": ["storage"],
-  "host_permissions": ["https://myanimelist.net/*", "https://api.mydublist.com/*", "https://raw.githubusercontent.com/*", "https://icons.duckduckgo.com/*"],
+  "host_permissions": [
+    "https://myanimelist.net/*",
+    "https://anilist.co/*",
+    "https://www.animenewsnetwork.com/*",
+    "https://www.anisearch.com/*",
+    "https://graphql.anilist.co/*",
+    "https://api.mydublist.com/*",
+    "https://raw.githubusercontent.com/*",
+    "https://icons.duckduckgo.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -16,7 +25,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://myanimelist.net/*"],
+      "matches": ["https://myanimelist.net/*", "https://anilist.co/*"],
       "js": ["browser-polyfill.min.js", "content.js"],
       "css": ["style.css"]
     }
