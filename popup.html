@@ -13,6 +13,20 @@
         <h1>MyDubList</h1>
       </div>
 
+      <div id="permBanner" class="perm-banner" hidden>
+        <div class="perm-banner-title">Permissions needed</div>
+        <div class="perm-banner-text">
+          MyDubList can't run until permissions are granted. Enable access to:
+          <ul id="permList" class="perm-banner-list"></ul>
+        </div>
+
+        <button id="permGrant" class="perm-banner-btn" type="button">
+          Enable site access
+        </button>
+
+        <div id="permError" class="perm-banner-error" hidden></div>
+      </div>
+
       <div class="field">
         <label for="enabled">Enabled</label>
         <label class="switch">

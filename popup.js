@@ -1,3 +1,80 @@
+const REQUIRED_ORIGINS = [
+  "https://myanimelist.net/*",
+  "https://anilist.co/*",
+  "https://api.mydublist.com/*",
+  "https://raw.githubusercontent.com/*",
+];
+
+function originLabel(origin) {
+  return origin.replace("https://", "").replace("/*", "");
+}
+
+async function getMissingOrigins() {
+  if (!browser.permissions?.contains) return [...REQUIRED_ORIGINS];
+
+  const missing = [];
+  for (const origin of REQUIRED_ORIGINS) {
+    try {
+      const ok = await browser.permissions.contains({ origins: [origin] });
+      if (!ok) missing.push(origin);
+    } catch {
+      // If the browser rejects the check (e.g., not requestable), treat as missing.
+      missing.push(origin);
+    }
+  }
+  return missing;
+}
+
+async function refreshPermissionsUI() {
+  const banner = document.getElementById("permBanner");
+  const list = document.getElementById("permList");
+  const btn = document.getElementById("permGrant");
+  const err = document.getElementById("permError");
+
+  if (!banner || !list || !btn || !err) return;
+
+  const missing = await getMissingOrigins();
+
+  if (!missing.length) {
+    banner.hidden = true;
+    return;
+  }
+
+  // Render missing list
+  list.innerHTML = "";
+  for (const o of missing) {
+    const li = document.createElement("li");
+    li.textContent = originLabel(o);
+    list.appendChild(li);
+  }
+
+  err.hidden = true;
+  err.textContent = "";
+  banner.hidden = false;
+
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      const granted = await browser.permissions.request({ origins: missing });
+      if (granted) {
+        banner.hidden = true;
+        reloadActiveTab();
+      } else {
+        err.hidden = false;
+        err.textContent =
+          "Permission was not granted. In Firefox: Extensions → MyDubList → Permissions / Site access.";
+      }
+    } catch (e) {
+      err.hidden = false;
+      err.textContent =
+        "Could not request permissions automatically. In Firefox: Extensions → MyDubList → Permissions / Site access.";
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
+
 function reloadActiveTab() {
   browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
     if (tabs[0]?.id) {
@@ -12,6 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const styleSelect = document.getElementById('style');
   const filterSelect = document.getElementById('filter');
   const confidenceSelect = document.getElementById('confidence');
+
+  refreshPermissionsUI();
 
   browser.storage.local.get(['mydublistEnabled', 'mydublistLanguage', 'mydublistStyle', 'mydublistFilter', 'mydublistConfidence'])
     .then((data) => {
