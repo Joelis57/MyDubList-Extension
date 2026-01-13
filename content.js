@@ -571,6 +571,9 @@ const MAL_RULE = {
   id: 'MAL',
   hosts: [/^(?:.*\.)?myanimelist\.net$/],
 
+  _sourcesLock: null,
+  _sourcesKey: null,
+
   // URL patterns
   animePathRegex: /^\/anime\/(\d+)(\/[^\/]*)?\/?$/,
   animeIdRegex: /^\/anime\/(\d+)/,
@@ -749,77 +752,124 @@ const MAL_RULE = {
       const m = window.location.pathname.match(this.animeIdRegex);
       if (!m) return;
       const malId = parseInt(m[1], 10);
-      if (document.getElementById('mydublist-sources-block')) return;
 
-      const res = await fetch(`${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const keys = Object.keys(data).filter((k) => !k.startsWith('_'));
-      if (!keys.length) return;
+      const key = `mal:${malId}|lang:${String(language || '').toLowerCase()}`;
 
-      const left = document.querySelector('.leftside');
-      if (!left) return;
-      const infoH2 = Array.from(left.querySelectorAll('h2')).find((h) => h.textContent.trim() === 'Information');
-      if (!infoH2) return;
+      // If the correct block is already present, bail.
+      const existing = document.getElementById('mydublist-sources-block');
+      if (existing && existing.getAttribute('data-mdl-key') === key) return;
 
-      let sourceCount = 0;
+      // If we're already building this exact key, reuse the in-flight promise.
+      if (this._sourcesLock && this._sourcesKey === key) return this._sourcesLock;
 
-      const h2 = document.createElement('h2');
-      const wrap = document.createElement('div');
-      wrap.className = 'external_links';
+      // Mark what we're building now.
+      this._sourcesKey = key;
 
-      for (const prov of PROVIDER_ORDER) {
-        if (!(prov in data)) continue;
-        const url = data[prov];
-        const label = PROVIDER_LABEL[prov] || prov;
-        const ico = faviconUrlFor(prov);
+      // Lock to prevent concurrent inserts (race on refresh / fast re-entry).
+      this._sourcesLock = (async () => {
+        try {
+          // Re-check after yielding (another call might have inserted already).
+          const again = document.getElementById('mydublist-sources-block');
+          if (again && again.getAttribute('data-mdl-key') === key) return;
 
-        if (url) {
-          sourceCount++;
-          const a = document.createElement('a');
-          a.href = url;
-          a.className = 'link ga-click';
-          a.setAttribute('data-dubbed-icon', 'true');
-          const img = document.createElement('img');
-          img.className = 'link_icon';
-          img.alt = 'icon';
-          img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
-          a.appendChild(img);
-          const cap = document.createElement('div');
-          cap.className = 'caption';
-          cap.textContent = label;
-          a.appendChild(cap);
-          wrap.appendChild(a);
-        } else {
-          const span = document.createElement('span');
-          span.className = 'link';
-          span.setAttribute('data-dubbed-icon', 'true');
-          const img = document.createElement('img');
-          img.className = 'link_icon';
-          img.alt = 'icon';
-          img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
-          span.appendChild(img);
-          const cap = document.createElement('div');
-          cap.className = 'caption';
-          cap.textContent = label;
-          span.appendChild(cap);
-          wrap.appendChild(span);
+          const res = await fetch(`${API_BASE}/api/anime/${malId}?lang=${encodeURIComponent(language)}`);
+          if (!res.ok) return;
+
+          const data = await res.json();
+          const keys = Object.keys(data).filter((k) => !k.startsWith('_'));
+          if (!keys.length) return;
+
+          const left = document.querySelector('.leftside');
+          if (!left) return;
+
+          const infoH2 = Array.from(left.querySelectorAll('h2')).find(
+            (h) => h.textContent.trim() === 'Information'
+          );
+          if (!infoH2) return;
+
+          let sourceCount = 0;
+
+          const h2 = document.createElement('h2');
+          const wrap = document.createElement('div');
+          wrap.className = 'external_links';
+
+          for (const prov of PROVIDER_ORDER) {
+            if (!(prov in data)) continue;
+            const url = data[prov];
+            const label = PROVIDER_LABEL[prov] || prov;
+            const ico = faviconUrlFor(prov);
+
+            if (url) {
+              sourceCount++;
+              const a = document.createElement('a');
+              a.href = url;
+              a.className = 'link ga-click';
+              a.setAttribute('data-dubbed-icon', 'true');
+
+              const img = document.createElement('img');
+              img.className = 'link_icon';
+              img.alt = 'icon';
+              img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+              a.appendChild(img);
+
+              const cap = document.createElement('div');
+              cap.className = 'caption';
+              cap.textContent = label;
+              a.appendChild(cap);
+
+              wrap.appendChild(a);
+            } else {
+              const span = document.createElement('span');
+              span.className = 'link';
+              span.setAttribute('data-dubbed-icon', 'true');
+
+              const img = document.createElement('img');
+              img.className = 'link_icon';
+              img.alt = 'icon';
+              img.src = ico || 'https://cdn.myanimelist.net/img/common/pc/arrow_right_blue.svg';
+              span.appendChild(img);
+
+              const cap = document.createElement('div');
+              cap.className = 'caption';
+              cap.textContent = label;
+              span.appendChild(cap);
+
+              wrap.appendChild(span);
+            }
+          }
+
+          h2.textContent = `MyDubList Sources (${sourceCount})`;
+
+          const br = document.createElement('br');
+          const block = document.createElement('div');
+          block.id = 'mydublist-sources-block';
+
+          // Key the block so we can detect "correct vs stale".
+          block.setAttribute('data-mdl-key', key);
+
+          block.appendChild(h2);
+          block.appendChild(wrap);
+          block.appendChild(br);
+
+          // Final de-dupe: remove any block that slipped in while we were fetching.
+          const old = document.getElementById('mydublist-sources-block');
+          if (old) old.remove();
+
+          left.insertBefore(block, infoH2);
+        } catch (e) {
+          log('maybeInsertSourcesSection error', e);
+        } finally {
+          // Release the lock so future attempts can retry if DOM wasn't ready yet.
+          if (this._sourcesKey === key) this._sourcesLock = null;
         }
-      }
+      })();
 
-      h2.textContent = `MyDubList Sources (${sourceCount})`;
-
-      const br = document.createElement('br');
-      const block = document.createElement('div');
-      block.id = 'mydublist-sources-block';
-      block.appendChild(h2);
-      block.appendChild(wrap);
-      block.appendChild(br);
-      left.insertBefore(block, infoH2);
+      return this._sourcesLock;
     } catch (e) {
       log('maybeInsertSourcesSection error', e);
     }
   }
+
 };
 
 /**

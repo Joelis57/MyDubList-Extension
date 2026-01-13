@@ -3,6 +3,7 @@ const REQUIRED_ORIGINS = [
   "https://anilist.co/*",
   "https://api.mydublist.com/*",
   "https://raw.githubusercontent.com/*",
+  "https://icons.duckduckgo.com/*"
 ];
 
 function originLabel(origin) {
