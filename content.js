@@ -191,25 +191,6 @@ document.head.appendChild(mdlFontStyle);
   document.addEventListener('mouseout', onOut, true);
 })();
 
-function ensureAniListSourcesPlacement(block, tries = 25) {
-  const sidebar = document.querySelector('.sidebar');
-  if (!sidebar || !block) return;
-
-  const tags = sidebar.querySelector(':scope > .tags');
-  if (tags) {
-    // Move it right before tags (even if it already exists elsewhere)
-    if (block.nextElementSibling !== tags) {
-      sidebar.insertBefore(block, tags);
-    }
-    return;
-  }
-
-  // Tags might not exist yet on first navigation; retry a bit.
-  if (tries > 0) {
-    setTimeout(() => ensureAniListSourcesPlacement(block, tries - 1), 120);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Badge UI (shared)
 // ---------------------------------------------------------------------------
@@ -1004,6 +985,13 @@ const ANILIST_RULE = {
     if (mode === 'background') {
       injectImageOverlayIconBackground(anchor, isPartial, style);
       return;
+    }
+
+    // media-card should be image-only (no icon on the text title link)
+    const mediaCard = anchor.closest('.media-card');
+    if (mediaCard && anchor.classList.contains('title')) {
+      const cover = mediaCard.querySelector('a.cover[href^="/anime/"], a.cover[href^="https://anilist.co/anime/"]');
+      if (cover) return;
     }
 
     // Text link
