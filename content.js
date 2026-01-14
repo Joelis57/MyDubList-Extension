@@ -1234,6 +1234,399 @@ const ANILIST_RULE = {
   }
 };
 
+/**
+ * aniSearch rule
+ */
+const ANISEARCH_RULE = {
+  id: 'aniSearch',
+  hosts: [/^(?:.*\.)?anisearch\.[a-z]{2,}$/i],
+
+  _sourcesLock: null,
+  _sourcesLastKey: null,
+
+  // URL patterns
+  animeIdRegex: /^\/anime\/(\d+)/i,
+
+  // JSONL mapping file (AniSearch id -> MAL id)
+  _mappingsUrl: 'https://raw.githubusercontent.com/Joelis57/MyDubList/main/dubs/mappings/mappings_anisearch.jsonl',
+
+  // Internal cache: AniSearch id -> MAL id
+  _idMap: new Map(),
+  _storageKeyPrefix: 'mydublist_anisearch_to_mal_',
+  _prefetchLock: null,
+
+  // Debug: log counts once
+  _didLogAnchorStats: false,
+
+  // -------------------------
+  // Page ID helpers
+  // -------------------------
+  getCurrentPageAnimeId() {
+    const m = window.location.pathname.match(this.animeIdRegex);
+    return m ? parseInt(m[1], 10) : null;
+  },
+
+  // -------------------------
+  // URL -> AniSearch anime id
+  // -------------------------
+  extractAnimeId(url) {
+    const path = new URL(url, window.location.origin).pathname;
+    const m = path.match(this.animeIdRegex);
+    return m ? parseInt(m[1], 10) : null;
+  },
+
+  // -------------------------
+  // Whitelist logic
+  // -------------------------
+  _isTrailerUrl(url) {
+    // /anime/<id>,<slug>/trailer/...  or  /anime/<id>,<slug>/trailer
+    return /\/trailer(?:\/|$)/i.test(url.pathname);
+  },
+
+  _isImageAnchor(anchor) {
+    return !!anchor.querySelector('img');
+  },
+
+  _isTextWhitelisted(anchor) {
+    // 1) Description
+    if (anchor.closest('#description .details-text')) return true;
+
+    // 2) Anime calendars (your table)
+    if (anchor.closest('table.responsive-table')) return true;
+
+    return false;
+  },
+
+  // Engine calls this to decide if an anchor should be processed at all
+  isValidAnimeLink(anchor, url) {
+    if (!(anchor instanceof HTMLAnchorElement)) return false;
+    if (anchor.dataset.dubbedIcon === 'true') return false;
+
+    // Only /anime/<id> links
+    const rawId = this.extractAnimeId(url.href);
+    if (!Number.isFinite(rawId)) return false;
+
+    // Never annotate trailers
+    if (this._isTrailerUrl(url)) return false;
+
+    const isImg = this._isImageAnchor(anchor);
+
+    // Never add image overlays inside trailers section
+    if (isImg && anchor.closest('#trailers')) return false;
+
+    // For TEXT anchors: whitelist ONLY
+    if (!isImg && !this._isTextWhitelisted(anchor)) return false;
+
+    return true;
+  },
+
+  // Keep scanning cheap, but also aligned with your whitelist:
+  // return anime anchors that either:
+  // - contain an image (overlay case)
+  // - OR are inside text whitelist (description/calendar)
+  queryAnimeAnchors(root) {
+    const scope = root && root.nodeType === Node.ELEMENT_NODE ? root : document;
+
+    const candidates = scope.querySelectorAll(
+      "a[href^='anime/'], a[href^='/anime/'], a[href^='https://www.anisearch.'], a[href^='https://anisearch.']"
+    );
+
+    const out = [];
+    let total = 0, kept = 0, keptImg = 0, keptText = 0;
+
+    for (const a of candidates) {
+      if (!(a instanceof HTMLAnchorElement)) continue;
+      total++;
+
+      // Fast prefilter before isValidAnimeLink():
+      const isImg = !!a.querySelector('img');
+      const isTextOk = !isImg && this._isTextWhitelisted(a);
+      if (!isImg && !isTextOk) continue; // text not whitelisted
+      if (isImg && a.closest('#trailers')) continue; // trailer image section
+
+      out.push(a);
+      kept++;
+      if (isImg) keptImg++;
+      else keptText++;
+    }
+
+    if (IS_DEBUG && !this._didLogAnchorStats) {
+      this._didLogAnchorStats = true;
+      log(`[aniSearch] queryAnimeAnchors: candidates=${total}, kept=${kept} (image=${keptImg}, text=${keptText})`);
+    }
+
+    return out;
+  },
+
+  // -------------------------
+  // Mapping (prefetch + sync lookup) — same pattern as AniList
+  // -------------------------
+  resolveLookupId(anisearchId /*, href */) {
+    return this._idMap.get(anisearchId) || null;
+  },
+
+  async _fetchMappingsFromJsonl(ids) {
+    // JSONL line: {"mal_id":1,"anisearch_id":1572}
+    return fetchJsonlIdMap(this._mappingsUrl, 'anisearch_id', 'mal_id', ids, 'aniSearch mappings');
+  },
+
+  async prefetchLookupIds(anisearchIds) {
+    const run = async () => {
+      const unique = [...new Set(anisearchIds)].filter((n) => Number.isFinite(n));
+      if (!unique.length) return;
+
+      const missing = unique.filter((id) => !this._idMap.has(id));
+      if (!missing.length) return;
+
+      if (IS_DEBUG) log(`[aniSearch] prefetch: want=${unique.length}, missing=${missing.length}`);
+
+      // 1) Load from storage
+      const keys = missing.map((id) => this._storageKeyPrefix + id);
+      const stored = await browser.storage.local.get(keys);
+
+      let loadedFromStorage = 0;
+      for (const id of missing) {
+        const v = stored[this._storageKeyPrefix + id];
+        if (Number.isFinite(v) && v > 0) {
+          this._idMap.set(id, v);
+          loadedFromStorage++;
+        }
+      }
+
+      const stillMissing = missing.filter((id) => !this._idMap.has(id));
+      if (IS_DEBUG) log(`[aniSearch] prefetch: loadedFromStorage=${loadedFromStorage}, stillMissing=${stillMissing.length}`);
+      if (!stillMissing.length) return;
+
+      // 2) Fetch from JSONL (streamed + early abort)
+      const fetched = await this._fetchMappingsFromJsonl(stillMissing);
+      if (!fetched.size) {
+        if (IS_DEBUG) log('[aniSearch] prefetch: fetched=0 (no mappings found)');
+        return;
+      }
+
+      const toStore = {};
+      for (const [aid, mid] of fetched.entries()) {
+        this._idMap.set(aid, mid);
+        toStore[this._storageKeyPrefix + aid] = mid;
+      }
+
+      await browser.storage.local.set(toStore);
+
+      if (IS_DEBUG) log(`[aniSearch] prefetch: fetched=${fetched.size}, totalCachedNow=${this._idMap.size}`);
+    };
+
+    // Serialize overlapping prefetches (same as AniList)
+    this._prefetchLock = (this._prefetchLock || Promise.resolve()).then(run, run);
+    return this._prefetchLock;
+  },
+
+  // -------------------------
+  // Injection
+  // -------------------------
+  hasBackgroundImage(anchor) {
+    const inlineBg = anchor.style.backgroundImage;
+    if (inlineBg && inlineBg !== 'none' && inlineBg.includes('url')) return true;
+
+    const computedBg = getComputedStyle(anchor).backgroundImage;
+    if (computedBg && computedBg !== 'none' && computedBg.includes('url')) return true;
+
+    if (anchor.hasAttribute('data-bg') || anchor.hasAttribute('data-src')) return true;
+    return false;
+  },
+
+  chooseOverlayMode(anchor) {
+    if (anchor.querySelector('img')) return 'img';
+    if (this.hasBackgroundImage(anchor)) return 'background';
+    return 'text';
+  },
+
+  injectForAnchor(anchor, isPartial, style) {
+    const mode = this.chooseOverlayMode(anchor);
+
+    if (mode === 'img') {
+      injectImageOverlayIcon(anchor, isPartial, style);
+      return;
+    }
+    if (mode === 'background') {
+      injectImageOverlayIconBackground(anchor, isPartial, style);
+      return;
+    }
+
+    // Text link icon
+    if (!anchor.textContent.trim()) return;
+    if (!/[ \u00A0]$/.test(anchor.textContent)) {
+      anchor.appendChild(document.createTextNode('\u00A0'));
+    }
+    anchor.appendChild(createTitleIcon(isPartial, true, style));
+  },
+
+  annotateTitle(dubbedSet, partialSet, style) {
+    const aniId = this.getCurrentPageAnimeId();
+    if (!Number.isFinite(aniId)) return;
+
+    const malId = this.resolveLookupId(aniId);
+    if (!Number.isFinite(malId)) return;
+
+    const h1 = document.querySelector('h1');
+    if (!h1) return;
+    if (h1.querySelector('.mydublist-icon')) return;
+
+    const isPartial = partialSet.has(malId);
+    const isDubbed = dubbedSet.has(malId);
+    if (!isPartial && !isDubbed) return;
+    
+    if (!/[ \u00A0]$/.test(h1.textContent || '')) h1.appendChild(document.createTextNode('\u00A0'));
+    const titleIcon = createTitleIcon(isPartial, false, style);
+    titleIcon.style.setProperty('font-size', '0.9em', 'important');
+    h1.appendChild(titleIcon);
+
+    h1.style.alignItems = 'center';
+    h1.style.gap = '0px';
+  },
+
+  async maybeInsertSourcesSection(language, tries = 20) {
+    try {
+      // Only on the main anime page (avoid ratings/other tabs)
+      const p = window.location.pathname;
+      if (!/^\/anime\/\d+(?:,[^\/]+)?\/?$/i.test(p)) return;
+
+      const aniId = this.getCurrentPageAnimeId?.();
+      if (!Number.isFinite(aniId)) return;
+
+      // Be defensive: ensure mapping exists (SPA timing)
+      if (typeof this.prefetchLookupIds === 'function') {
+        try { await this.prefetchLookupIds([aniId]); } catch {}
+      }
+
+      const malId = this.resolveLookupId?.(aniId);
+      if (!Number.isFinite(malId)) {
+        if (IS_DEBUG) log(`[aniSearch] sources: missing mapping for anisearch_id=${aniId}`);
+        return;
+      }
+
+      const key = `anisearch|${String(language || '').toLowerCase()}|${malId}`;
+
+      const status = document.querySelector('section#status');
+      if (!status) {
+        if (tries > 0) {
+          setTimeout(() => this.maybeInsertSourcesSection(language, tries - 1), 120);
+        } else if (IS_DEBUG) {
+          log('[aniSearch] sources: #status not found, giving up');
+        }
+        return;
+      }
+
+      // If already present & correct, just ensure placement right after #status
+      const existing = document.getElementById('mydublist-sources-anisearch');
+      if (existing && existing.getAttribute('data-mdl-key') === key) {
+        if (existing.previousElementSibling !== status) status.insertAdjacentElement('afterend', existing);
+        return;
+      }
+
+      // Serialize builds (avoid multiple fetches on mutations)
+      const run = async () => {
+        const ex = document.getElementById('mydublist-sources-anisearch');
+        if (ex && ex.getAttribute('data-mdl-key') === key) {
+          if (ex.previousElementSibling !== status) status.insertAdjacentElement('afterend', ex);
+          return;
+        }
+
+        const data = await mdlGetAnimeSources(malId, language);
+        if (!data) {
+          if (IS_DEBUG) log(`[aniSearch] sources: no API data for mal_id=${malId}`);
+          return;
+        }
+
+        const providers = PROVIDER_ORDER
+          .filter((prov) => !String(prov).startsWith('_') && !!data[prov]);
+
+        if (!providers.length) return;
+
+        const section = document.createElement('section');
+        section.id = 'mydublist-sources-anisearch';
+        section.setAttribute('data-mdl-sources', 'true');
+        section.setAttribute('data-mdl-key', key);
+
+        const h2 = document.createElement('h2');
+        h2.textContent = `MyDubList Sources (${providers.length})`;
+        section.appendChild(h2);
+
+        const div = document.createElement('div');
+        const ul = document.createElement('ul');
+        ul.className = 'xlist row';
+
+        for (const prov of providers) {
+          const href = data[prov];
+          if (!href) continue;
+
+          const label = PROVIDER_LABEL[prov] || prov;
+          const ico = faviconUrlFor(prov);
+
+          let host = '';
+          try { host = new URL(href).hostname; } catch {}
+
+          const li = document.createElement('li');
+
+          // 1) icon link (like contributors avatar)
+          const aImg = document.createElement('a');
+          aImg.href = href;
+          aImg.target = '_blank';
+          aImg.rel = 'nofollow noopener noreferrer';
+          aImg.setAttribute('data-mdl-no-annotate', 'true');
+
+          const img = document.createElement('img');
+          img.loading = 'lazy';
+          img.src = ico || '';
+          img.alt = label;
+          img.title = label;
+          img.className = 'avatar';
+
+          // Favicons can be tiny; keep them legible in the avatar slot
+          img.style.objectFit = 'contain';
+          img.style.background = 'transparent';
+
+          aImg.appendChild(img);
+          li.appendChild(aImg);
+
+          // 2) provider name link
+          const aName = document.createElement('a');
+          aName.href = href;
+          aName.target = '_blank';
+          aName.rel = 'nofollow noopener noreferrer';
+          aName.textContent = label;
+          aName.setAttribute('data-mdl-no-annotate', 'true');
+          li.appendChild(aName);
+
+          // 3) small “meta” text like contributors' Cookies
+          const meta = document.createElement('span');
+          meta.textContent = host || 'External link';
+          li.appendChild(meta);
+
+          ul.appendChild(li);
+        }
+
+        div.appendChild(ul);
+        section.appendChild(div);
+
+        // Replace old block if any
+        const old = document.getElementById('mydublist-sources-anisearch');
+        if (old) old.remove();
+
+        // Insert right after Member Statistics
+        status.insertAdjacentElement('afterend', section);
+
+        if (IS_DEBUG) log(`[aniSearch] sources inserted: mal_id=${malId}, count=${providers.length}`);
+        this._sourcesLastKey = key;
+      };
+
+      this._sourcesLock = (this._sourcesLock || Promise.resolve()).then(run, run);
+      return this._sourcesLock;
+    } catch (e) {
+      log('[aniSearch] maybeInsertSourcesSection error', e);
+    }
+  }
+};
+
 const ANN_RULE = {
   id: 'ANN',
   hosts: [/^(?:.*\.)?animenewsnetwork\.com$/],
@@ -1242,7 +1635,7 @@ const ANN_RULE = {
   // Implement later.
 };
 
-const SITE_RULES = [MAL_RULE, ANILIST_RULE, ANN_RULE];
+const SITE_RULES = [MAL_RULE, ANILIST_RULE, ANISEARCH_RULE, ANN_RULE];
 
 function getActiveSiteRule() {
   const host = window.location.hostname;
