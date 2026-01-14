@@ -1054,173 +1054,171 @@ const ANILIST_RULE = {
   },
 
   async maybeInsertSourcesSection(language) {
-  try {
-    const anilistId = this.getCurrentPageAnimeId();
-    if (!anilistId) return;
+    try {
+      const anilistId = this.getCurrentPageAnimeId();
+      if (!anilistId) return;
 
-    // Ensure we have a MAL id (SPA navigations can land on a page before the mapping is cached)
-    await this.prefetchLookupIds([anilistId]);
-    const malId = this.resolveLookupId(anilistId);
-    if (!malId) return;
+      await this.prefetchLookupIds([anilistId]);
+      const malId = this.resolveLookupId(anilistId);
+      if (!malId) return;
 
-    const key = `${language}:${malId}`;
-    const existing = document.getElementById('mydublist-sources-anilist');
-    if (existing && existing.getAttribute('data-mdl-key') === key) {
-      ensureAniListSourcesPlacement(existing);
-      return;
-    }
+      const key = `${language}:${malId}`;
 
-    // Serialize updates so repeated DOM mutations don't trigger repeated fetches.
-    const run = async () => {
-      const ex = document.getElementById('mydublist-sources-anilist');
-      if (ex && ex.getAttribute('data-mdl-key') === key) return;
+      const ensurePlaced = (block) => {
+        const sidebar = document.querySelector('.sidebar');
+        const tags = sidebar?.querySelector(':scope > .tags');
+        if (!sidebar || !tags || !block) return false;
 
-      // Fetch (cached + de-duped) — prevents spamming when CORS/network fails.
-      const data = await mdlGetAnimeSources(malId, language);
-      if (!data) return;
+        if (block.parentElement === sidebar && block.nextElementSibling !== tags) {
+          sidebar.insertBefore(block, tags);
+        }
+        return true;
+      };
 
-      const providerKeys = Object.keys(data).filter((k) => !k.startsWith('_') && !!data[k]);
-      if (!providerKeys.length) return;
+      const scheduleRetry = () => {
+        if (this._sourcesRetryTimer) return;
+        this._sourcesRetryTimer = setTimeout(() => {
+          this._sourcesRetryTimer = null;
+          this.maybeInsertSourcesSection(language);
+        }, 250);
+      };
 
-      const sidebar = document.querySelector('.sidebar');
-      if (!sidebar) return;
+      // If we already have the correct block for this key, NEVER rebuild it.
+      // Just ensure placement once tags exist.
+      const existing = document.getElementById('mydublist-sources-anilist');
+      if (existing && existing.getAttribute('data-mdl-key') === key) {
+        if (!ensurePlaced(existing)) scheduleRetry();
+        return;
+      }
 
-      // Build a block that matches AniList's "External & Streaming links" styling.
-      // AniList uses scoped CSS (data-v-xxxx attributes), so we clone an existing block if available.
-      const externalTpl = sidebar.querySelector(':scope > .external-links');
-      let block, wrap, h2, linkTpl;
+      const run = async () => {
+        // Re-check inside serialized run
+        const ex = document.getElementById('mydublist-sources-anilist');
+        if (ex && ex.getAttribute('data-mdl-key') === key) {
+          if (!ensurePlaced(ex)) scheduleRetry();
+          return;
+        }
 
-      if (externalTpl) {
-        block = externalTpl.cloneNode(true);
+        // Wait for AniList DOM to be ready BEFORE building, otherwise we’ll rebuild later and cause flicker.
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+
+        const externalTpl = sidebar.querySelector(':scope > .external-links');
+        const tags = sidebar.querySelector(':scope > .tags');
+        if (!externalTpl || !tags) {
+          scheduleRetry();
+          return;
+        }
+
+        const data = await mdlGetAnimeSources(malId, language);
+        if (!data) return;
+
+        const providerKeys = Object.keys(data).filter((k) => !k.startsWith('_') && !!data[k]);
+        if (!providerKeys.length) return;
+
+        // Build a new block (only because we *don’t* have the right one yet)
+        const block = externalTpl.cloneNode(true);
         block.id = 'mydublist-sources-anilist';
         block.setAttribute('data-mdl-sources', 'true');
         block.classList.add('mydublist-sources');
+        block.setAttribute('data-mdl-key', key);
 
-        h2 = block.querySelector('h2') || block.querySelector(':scope > h2');
+        const h2 = block.querySelector('h2') || block.querySelector(':scope > h2');
         if (h2) h2.textContent = 'MyDubList Sources';
 
-        wrap = block.querySelector('.external-links-wrap') || block.querySelector(':scope > .external-links-wrap');
-        if (wrap) wrap.innerHTML = '';
+        const wrap =
+          block.querySelector('.external-links-wrap') ||
+          block.querySelector(':scope > .external-links-wrap');
+        if (!wrap) return;
+        wrap.innerHTML = '';
 
-        linkTpl = externalTpl.querySelector('.external-links-wrap .external-link');
-      } else {
-        // Fallback (should be rare)
-        block = document.createElement('div');
-        block.id = 'mydublist-sources-anilist';
-        block.setAttribute('data-mdl-sources', 'true');
-        block.className = 'external-links mydublist-sources';
+        const linkTpl = externalTpl.querySelector('.external-links-wrap .external-link') || null;
 
-        h2 = document.createElement('h2');
-        h2.textContent = 'MyDubList Sources';
-        block.appendChild(h2);
+        let sourceCount = 0;
 
-        wrap = document.createElement('div');
-        wrap.className = 'external-links-wrap';
-        block.appendChild(wrap);
+        for (const prov of PROVIDER_ORDER) {
+          const url = data[prov];
+          if (!url) continue;
 
-        linkTpl = null;
-      }
+          sourceCount++;
+          const label = PROVIDER_LABEL[prov] || prov;
+          const ico = faviconUrlFor(prov);
 
-      let sourceCount = 0;
-
-      for (const prov of PROVIDER_ORDER) {
-        if (!(prov in data)) continue;
-        const url = data[prov];
-        if (!url) continue;
-
-        sourceCount++;
-        const label = PROVIDER_LABEL[prov] || prov;
-        const ico = faviconUrlFor(prov);
-
-        let a;
-        if (linkTpl) {
-          a = linkTpl.cloneNode(true);
-        } else {
-          a = document.createElement('a');
+          const a = linkTpl ? linkTpl.cloneNode(true) : document.createElement('a');
           a.className = 'external-link';
-        }
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.setAttribute('data-mdl-no-annotate', 'true');
 
-        a.href = url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
+          const linkColor =
+            (typeof PROVIDER_COLOR !== 'undefined' && PROVIDER_COLOR[prov])
+              ? PROVIDER_COLOR[prov]
+              : '#999';
+          a.style.setProperty('--link-color', linkColor);
 
-        // Do not annotate icons inside the MyDubList Sources block
-        a.setAttribute('data-mdl-no-annotate', 'true');
+          const iconWrap = a.querySelector('.icon-wrap') || a.querySelector(':scope > div');
+          if (iconWrap) {
+            iconWrap.innerHTML = '';
+            iconWrap.style.setProperty('background', 'transparent', 'important');
+            iconWrap.style.setProperty('background-color', 'transparent', 'important');
 
-        // Make these links behave like AniList external links (hover color from --link-color)
-        a.classList.add('external-link');
-        a.classList.remove('no-color');
-        const linkColor = (typeof PROVIDER_COLOR !== 'undefined' && PROVIDER_COLOR[prov]) ? PROVIDER_COLOR[prov] : 'nulle0';
-        a.style.setProperty('--link-color', linkColor);
-
-
-        const iconWrap = a.querySelector('.icon-wrap') || a.querySelector(':scope > div');
-        if (iconWrap) {
-          iconWrap.innerHTML = '';
-
-          // Ensure no permanent background color behind favicons (use --link-color hover styling instead)
-          iconWrap.style.setProperty('background', 'transparent', 'important');
-          iconWrap.style.setProperty('background-color', 'transparent', 'important');
-
-          if (ico) {
-            const img = document.createElement('img');
-            img.className = 'icon';
-            img.alt = label;
-            img.src = ico;
-
-            // Force a sane icon size in case scoped CSS doesn't apply to our injected nodes.
-            img.style.width = '16px';
-            img.style.height = '16px';
-            img.style.objectFit = 'contain';
-
-            iconWrap.appendChild(img);
-          } else {
-            iconWrap.textContent = '🔗';
-            iconWrap.style.display = 'flex';
-            iconWrap.style.alignItems = 'center';
-            iconWrap.style.justifyContent = 'center';
+            if (ico) {
+              const img = document.createElement('img');
+              img.className = 'icon';
+              img.alt = label;
+              img.src = ico;
+              img.style.width = '16px';
+              img.style.height = '16px';
+              img.style.objectFit = 'contain';
+              iconWrap.appendChild(img);
+            } else {
+              iconWrap.textContent = '🔗';
+              iconWrap.style.display = 'flex';
+              iconWrap.style.alignItems = 'center';
+              iconWrap.style.justifyContent = 'center';
+            }
           }
+
+          const nameEl = a.querySelector('.name') || a.querySelector('span');
+          if (nameEl) nameEl.textContent = label;
+          else {
+            const name = document.createElement('span');
+            name.className = 'name';
+            name.textContent = label;
+            a.appendChild(name);
+          }
+
+          wrap.appendChild(a);
         }
 
-        const nameEl = a.querySelector('.name') || a.querySelector('span');
-        if (nameEl) {
-          nameEl.textContent = label;
-        } else {
-          const name = document.createElement('span');
-          name.className = 'name';
-          name.textContent = label;
-          a.appendChild(name);
+        if (!sourceCount) return;
+        if (h2) h2.textContent = `MyDubList Sources (${sourceCount})`;
+
+        // Remove ONLY if it’s a different key (SPA navigation)
+        const old = document.getElementById('mydublist-sources-anilist');
+        if (old) {
+          const oldKey = old.getAttribute('data-mdl-key');
+          if (oldKey === key) {
+            // Someone inserted it while we were building; don't replace (prevents flicker)
+            ensurePlaced(old);
+            return;
+          }
+          old.remove();
         }
 
-        wrap.appendChild(a);
-      }
+        sidebar.insertBefore(block, tags);
+        ensurePlaced(block);
 
-      if (!sourceCount) return;
+        this._sourcesLastKey = key;
+      };
 
-      if (h2) h2.textContent = `MyDubList Sources (${sourceCount})`;
-
-      // Replace any previous block (e.g., after SPA navigation or setting change)
-      const old = document.getElementById('mydublist-sources-anilist');
-      if (old) old.remove();
-
-      block.setAttribute('data-mdl-key', key);
-
-      // Insert specifically between "data" and "tags" (or just before tags if structure changes).
-      const tags = sidebar.querySelector(':scope > .tags');
-      if (tags) sidebar.insertBefore(block, tags);
-      else sidebar.appendChild(block);
-
-      ensureAniListSourcesPlacement(block);
-
-      this._sourcesLastKey = key;
-    };
-
-    this._sourcesLock = (this._sourcesLock || Promise.resolve()).then(run, run);
-    return this._sourcesLock;
-  } catch (e) {
-    log('AniList maybeInsertSourcesSection error', e);
-  }
-},
+      this._sourcesLock = (this._sourcesLock || Promise.resolve()).then(run, run);
+      return this._sourcesLock;
+    } catch (e) {
+      log('AniList maybeInsertSourcesSection error', e);
+    }
+  },
 
   queryAnimeAnchors(root) {
     const scope = root && root.nodeType === Node.ELEMENT_NODE ? root : document;
