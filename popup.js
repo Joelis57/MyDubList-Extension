@@ -2,6 +2,10 @@ const REQUIRED_ORIGINS = [
   "https://myanimelist.net/*",
   "https://anilist.co/*",
   "https://www.anisearch.com/*",
+  "https://www.anisearch.de/*",
+  "https://www.anisearch.es/*",
+  "https://www.anisearch.fr/*",
+  "https://www.anisearch.it/*",
   "https://api.mydublist.com/*",
   "https://raw.githubusercontent.com/*",
   "https://icons.duckduckgo.com/*"
