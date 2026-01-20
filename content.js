@@ -1693,7 +1693,7 @@ if (!activeRule) {
         else if (browserLang.startsWith('it')) language = 'italian';
         else if (browserLang.startsWith('ja')) language = 'japanese';
         else if (browserLang.startsWith('ko')) language = 'korean';
-        else if (browserLang.startsWith('zh')) language = 'mandarin';
+        else if (browserLang.startsWith('zh')) language = 'chinese';
         else if (browserLang.startsWith('pt')) language = 'portuguese';
         else if (browserLang.startsWith('es')) language = 'spanish';
         else if (browserLang.startsWith('tl')) language = 'tagalog';
