@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MyDubList",
   "version": "2.1.4",
-  "description": "Marks dubbed anime in YOUR language on MyAnimeList and AniList and lets you filter them.",
+  "description": "Marks dubbed anime in YOUR language on MyAnimeList, AniList and aniSearch and lets you filter them.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://myanimelist.net/*",
