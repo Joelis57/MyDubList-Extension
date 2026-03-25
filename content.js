@@ -57,7 +57,7 @@ async function mdlGetAnimeSources(malId, language) {
   return p;
 }
 
-const PROVIDER_ORDER = ['MAL', 'AniList', 'ANN', 'aniSearch', 'AnimeSchedule', 'Kitsu', 'HiAnime', 'Kenny', 'Manual', 'NSFW'];
+const PROVIDER_ORDER = ['MAL', 'AniList', 'ANN', 'aniSearch', 'AnimeSchedule', 'Kitsu', 'AniWatch', 'Kenny', 'Manual', 'NSFW'];
 const PROVIDER_LABEL = {
   MAL: 'MyAnimeList',
   AniList: 'AniList',
@@ -65,7 +65,7 @@ const PROVIDER_LABEL = {
   aniSearch: 'aniSearch',
   AnimeSchedule: 'AnimeSchedule',
   Kitsu: 'Kitsu',
-  HiAnime: 'HiAnime',
+  AniWatch: 'AniWatch',
   Kenny: 'Kenny Forum',
   Manual: 'Manual',
   NSFW: 'NSFW'
@@ -77,14 +77,14 @@ const PROVIDER_COLOR = {
   aniSearch: '#fd945bff',
   AnimeSchedule: '#4078c5',
   Kitsu: '#fb7460',
-  HiAnime: '#2f2b4f',
+  AniWatch: '#2f2b4f',
   Kenny: '#2E51A2e0',
   Manual: '#6B7280e0',
   NSFW: '#EF4444e0'
 };
 
 const FAVICON_DOMAIN = {
-  HiAnime: 'hianime.to',
+  AniWatch: 'aniwatchtv.to',
   AniList: 'anilist.co',
   ANN: 'animenewsnetwork.com',
   aniSearch: 'anisearch.com',
