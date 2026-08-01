@@ -779,9 +779,13 @@ const MAL_RULE = {
             const url = data[prov];
             const label = PROVIDER_LABEL[prov] || prov;
             const ico = faviconUrlFor(prov);
+            // Count the row, not the link. Providers the API deliberately sends
+            // without a URL (AniWatch, NSFW) still render a greyed row, so
+            // counting only linkable ones made the header disagree with what is
+            // on screen — 5 vs 6 rows on most English titles.
+            sourceCount++;
 
             if (url) {
-              sourceCount++;
               const a = document.createElement('a');
               a.href = url;
               a.className = 'link ga-click';
@@ -1691,7 +1695,10 @@ if (!activeRule) {
         else if (browserLang.startsWith('he')) language = 'hebrew';
         else if (browserLang.startsWith('hu')) language = 'hungarian';
         else if (browserLang.startsWith('it')) language = 'italian';
-        else if (browserLang.startsWith('ja')) language = 'japanese';
+        // No 'ja' mapping on purpose: dubbed_japanese.json is the VA-language
+        // list (15,630 ids), not a dub list, the site excludes it, and the popup
+        // offers no such option — so a ja-locale first run badged nearly every
+        // title and left the selector blank. Fall through to the default.
         else if (browserLang.startsWith('ko')) language = 'korean';
         else if (browserLang.startsWith('zh')) language = 'chinese';
         else if (browserLang.startsWith('pt')) language = 'portuguese';
