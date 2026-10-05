@@ -14,8 +14,7 @@
     "https://www.anisearch.fr/*",
     "https://www.anisearch.it/*",
     "https://api.mydublist.com/*",
-    "https://raw.githubusercontent.com/*",
-    "https://icons.duckduckgo.com/*"
+    "https://raw.githubusercontent.com/*"
   ],
   "optional_host_permissions": [
     "https://myanimelist.net/*",
@@ -26,8 +25,7 @@
     "https://www.anisearch.fr/*",
     "https://www.anisearch.it/*",
     "https://api.mydublist.com/*",
-    "https://raw.githubusercontent.com/*",
-    "https://icons.duckduckgo.com/*"
+    "https://raw.githubusercontent.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -57,6 +55,18 @@
     {
       "resources": ["fonts/*"],
       "matches": ["<all_urls>"]
+    },
+    {
+      "resources": ["icons/sources/*"],
+      "matches": [
+        "https://myanimelist.net/*",
+        "https://anilist.co/*",
+        "https://www.anisearch.com/*",
+        "https://www.anisearch.de/*",
+        "https://www.anisearch.es/*",
+        "https://www.anisearch.fr/*",
+        "https://www.anisearch.it/*"
+      ]
     }
   ],
   "icons": {

@@ -7,8 +7,7 @@ const REQUIRED_ORIGINS = [
   "https://www.anisearch.fr/*",
   "https://www.anisearch.it/*",
   "https://api.mydublist.com/*",
-  "https://raw.githubusercontent.com/*",
-  "https://icons.duckduckgo.com/*"
+  "https://raw.githubusercontent.com/*"
 ];
 
 function originLabel(origin) {
