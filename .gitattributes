@@ -1,0 +1,2 @@
+# Every text file stays LF, whatever core.autocrlf says.
+* text=auto eol=lf
