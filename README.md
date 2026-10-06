@@ -8,5 +8,5 @@ https://github.com/Joelis57/MyDubList
 [![Install for Chrome](https://img.shields.io/badge/Install-Chrome%20Web%20Store-4285F4?logo=google-chrome&logoColor=white)](https://chrome.google.com/webstore/detail/mydublist/hdpppphfhlhmehghmndopednfpbimkco)
 [![Install for Firefox](https://img.shields.io/badge/Install-Firefox%20Add--ons-FF7139?logo=firefox-browser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/mydublist)
 
-## Note
-`optional_host_permissions` required in Firefox to request permissions.
+## Store packages
+`python build_zips.py` writes `dist/mydublist-chrome-<version>.zip` and `dist/mydublist-firefox-<version>.zip`.
