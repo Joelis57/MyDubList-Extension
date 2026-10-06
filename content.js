@@ -1860,9 +1860,6 @@ if (!activeRule) {
         annotateAnchors(anchors);
       }
 
-      // Initial scan
-      await scan(document);
-
       // Debounced + scoped MutationObserver for dynamic pages
       let mutationTimeout = null;
       const pendingRoots = new Set();
@@ -1891,7 +1888,11 @@ if (!activeRule) {
         }, 100);
       });
 
+      // Observe before the initial scan: it awaits lookups, and nodes added meanwhile were missed.
       observer.observe(document.body, { childList: true, subtree: true });
+
+      // Initial scan
+      await scan(document);
 
       log(`Annotation active for site rule: ${activeRule.id}`);
     });
