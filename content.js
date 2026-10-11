@@ -410,6 +410,7 @@ function injectImageOverlayIconBackground(anchor, isPartial, style = 'style_1') 
 
   // Ensure the badge renders above AniList overlays inside covers.
   span.style.zIndex = '1000';
+  target.style.isolation = 'isolate';
 
   maybeHideOnHover(anchor, span);
   target.appendChild(span);
