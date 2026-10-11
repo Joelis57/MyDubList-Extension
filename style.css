@@ -38,6 +38,27 @@
   }
 }
 
+.mydublist-icon.icon-unknown:before {
+  content: "?";
+  font-family: Overpass, Arial, sans-serif;
+  font-weight: 800;
+}
+
+.mydublist-icon.icon-unknown:not(.icon-dubs-image) {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 1.35em;
+  height: 1.35em;
+  padding: 0 !important;
+  border: 0.1em solid currentColor;
+  border-radius: 50%;
+  font-size: 0.75em;
+  line-height: 1.2em !important;
+  text-align: center;
+  vertical-align: 0.15em;
+  opacity: 0.6;
+}
+
 .hoverinfo-contaniner:hover .icon-dubs-hover-hide,
 a:hover .icon-dubs-hover-hide {
   opacity: 0;

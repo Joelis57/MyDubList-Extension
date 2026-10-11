@@ -196,7 +196,7 @@ document.head.appendChild(mdlFontStyle);
 // ---------------------------------------------------------------------------
 
 function createTitleIcon(isPartial = false, isLink = false, style = 'style_1') {
-  const base = isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`;
+  const base = isPartial === 'unknown' ? 'icon-unknown' : isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`;
   const typeClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
   const span = document.createElement('span');
   span.className = `mydublist-icon ${base} ${typeClass}`;
@@ -206,7 +206,7 @@ function createTitleIcon(isPartial = false, isLink = false, style = 'style_1') {
 function createOverlayIconSpan(isPartial, style) {
   const span = document.createElement('span');
   span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`);
+  span.classList.add(isPartial === 'unknown' ? 'icon-unknown' : isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`);
   return span;
 }
 
@@ -410,6 +410,7 @@ function injectImageOverlayIconBackground(anchor, isPartial, style = 'style_1') 
 
   // Ensure the badge renders above AniList overlays inside covers.
   span.style.zIndex = '1000';
+  target.style.isolation = 'isolate';
 
   maybeHideOnHover(anchor, span);
   target.appendChild(span);
@@ -917,7 +918,7 @@ const ANILIST_RULE = {
     if (anchor.dataset.dubbedIcon === 'true') return false;
 
     // Avoid annotating UI nav links (if they ever match in the future)
-    if (anchor.closest('.nav')) return false;
+    if (anchor.closest('.nav') && !anchor.closest('.quick-search')) return false;
 
     return true;
   },
@@ -991,11 +992,11 @@ const ANILIST_RULE = {
       return;
     }
 
-    // media-card should be image-only (no icon on the text title link)
-    const mediaCard = anchor.closest('.media-card');
-    if (mediaCard && anchor.classList.contains('title')) {
-      const cover = mediaCard.querySelector('a.cover[href^="/anime/"], a.cover[href^="https://anilist.co/anime/"]');
-      if (cover) return;
+    // media-card and activity-entry should be image-only (no icon on the text title link)
+    const mediaCard = anchor.closest('.media-card, .activity-entry');
+    if (mediaCard) {
+      const cover = mediaCard.querySelector('a.cover[href*="/anime/"], a.image-link[href*="/anime/"]');
+      if (cover && cover !== anchor && this.extractAnimeId(cover.href) === this.extractAnimeId(anchor.href)) return;
     }
 
     // Text link
@@ -1011,9 +1012,28 @@ const ANILIST_RULE = {
       if (coverLink) return;
     }
 
+    // Quick search rows: place the icon right after the title text (before the year/format info).
+    const quickSearchName = anchor.closest('.quick-search') && anchor.querySelector('.name');
+    if (quickSearchName?.firstChild) {
+      quickSearchName.firstChild.after(createTitleIcon(isPartial, true, style));
+      return;
+    }
+
     if (!anchor.textContent.trim()) return;
     if (!/[ \s]$/.test(anchor.textContent)) anchor.appendChild(document.createTextNode('\u00A0'));
     anchor.appendChild(createTitleIcon(isPartial, true, style));
+  },
+
+  applyFilter(anchor, isDubbed, isPartial, filter) {
+    const shouldHide = (filter === 'dubbed' && !isDubbed && !isPartial) || (filter === 'undubbed' && (isDubbed || isPartial));
+    if (!shouldHide || !window.location.pathname.startsWith('/search/')) return;
+
+    const card = anchor.closest('.results > .media-card');
+    if (card) card.style.display = 'none';
+  },
+
+  markUnknown(anchor) {
+    return !!(anchor.closest('.quick-search') || (window.location.pathname.startsWith('/search/') && anchor.closest('.results > .media-card')));
   },
 
   annotateTitle(dubbedSet, partialSet, style) {
@@ -1783,6 +1803,11 @@ if (!activeRule) {
           if (!lookupId) {
             // If mapping is unavailable, treat as processed for this run.
             processed.add(anchor);
+            if (activeRule.markUnknown?.(anchor)) {
+              anchor.dataset.dubbedIcon = 'true';
+              anchor.title ||= "MyDubList can't check this title";
+              activeRule.injectForAnchor(anchor, 'unknown', style);
+            }
             continue;
           }
 
