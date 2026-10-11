@@ -1016,6 +1016,14 @@ const ANILIST_RULE = {
     anchor.appendChild(createTitleIcon(isPartial, true, style));
   },
 
+  applyFilter(anchor, isDubbed, isPartial, filter) {
+    const shouldHide = (filter === 'dubbed' && !isDubbed && !isPartial) || (filter === 'undubbed' && (isDubbed || isPartial));
+    if (!shouldHide || !window.location.pathname.startsWith('/search/')) return;
+
+    const card = anchor.closest('.results > .media-card');
+    if (card) card.style.display = 'none';
+  },
+
   annotateTitle(dubbedSet, partialSet, style) {
     const anilistId = this.getCurrentPageAnimeId();
     if (!anilistId) return;
