@@ -196,7 +196,7 @@ document.head.appendChild(mdlFontStyle);
 // ---------------------------------------------------------------------------
 
 function createTitleIcon(isPartial = false, isLink = false, style = 'style_1') {
-  const base = isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`;
+  const base = isPartial === 'unknown' ? 'icon-unknown' : isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`;
   const typeClass = isLink ? 'icon-dubs-link' : 'icon-dubs-title';
   const span = document.createElement('span');
   span.className = `mydublist-icon ${base} ${typeClass}`;
@@ -206,7 +206,7 @@ function createTitleIcon(isPartial = false, isLink = false, style = 'style_1') {
 function createOverlayIconSpan(isPartial, style) {
   const span = document.createElement('span');
   span.className = 'icon-dubs-image mydublist-icon';
-  span.classList.add(isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`);
+  span.classList.add(isPartial === 'unknown' ? 'icon-unknown' : isPartial ? `icon-partial_${style}` : `icon-dubs_${style}`);
   return span;
 }
 
@@ -1032,6 +1032,10 @@ const ANILIST_RULE = {
     if (card) card.style.display = 'none';
   },
 
+  markUnknown(anchor) {
+    return !!(anchor.closest('.quick-search') || (window.location.pathname.startsWith('/search/') && anchor.closest('.results > .media-card')));
+  },
+
   annotateTitle(dubbedSet, partialSet, style) {
     const anilistId = this.getCurrentPageAnimeId();
     if (!anilistId) return;
@@ -1799,6 +1803,11 @@ if (!activeRule) {
           if (!lookupId) {
             // If mapping is unavailable, treat as processed for this run.
             processed.add(anchor);
+            if (activeRule.markUnknown?.(anchor)) {
+              anchor.dataset.dubbedIcon = 'true';
+              anchor.title ||= "MyDubList can't check this title";
+              activeRule.injectForAnchor(anchor, 'unknown', style);
+            }
             continue;
           }
 
