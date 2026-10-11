@@ -917,7 +917,7 @@ const ANILIST_RULE = {
     if (anchor.dataset.dubbedIcon === 'true') return false;
 
     // Avoid annotating UI nav links (if they ever match in the future)
-    if (anchor.closest('.nav')) return false;
+    if (anchor.closest('.nav') && !anchor.closest('.quick-search')) return false;
 
     return true;
   },
@@ -1009,6 +1009,13 @@ const ANILIST_RULE = {
     if (recCard) {
       const coverLink = recCard.querySelector('a.cover-link[href^="/anime/"], a.cover-link[href^="https://anilist.co/anime/"]');
       if (coverLink) return;
+    }
+
+    // Quick search rows: place the icon right after the title text (before the year/format info).
+    const quickSearchName = anchor.closest('.quick-search') && anchor.querySelector('.name');
+    if (quickSearchName?.firstChild) {
+      quickSearchName.firstChild.after(createTitleIcon(isPartial, true, style));
+      return;
     }
 
     if (!anchor.textContent.trim()) return;
