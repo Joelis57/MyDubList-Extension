@@ -992,11 +992,11 @@ const ANILIST_RULE = {
       return;
     }
 
-    // media-card should be image-only (no icon on the text title link)
-    const mediaCard = anchor.closest('.media-card');
-    if (mediaCard && anchor.classList.contains('title')) {
-      const cover = mediaCard.querySelector('a.cover[href^="/anime/"], a.cover[href^="https://anilist.co/anime/"]');
-      if (cover) return;
+    // media-card and activity-entry should be image-only (no icon on the text title link)
+    const mediaCard = anchor.closest('.media-card, .activity-entry');
+    if (mediaCard) {
+      const cover = mediaCard.querySelector('a.cover[href*="/anime/"], a.image-link[href*="/anime/"]');
+      if (cover && cover !== anchor && this.extractAnimeId(cover.href) === this.extractAnimeId(anchor.href)) return;
     }
 
     // Text link
